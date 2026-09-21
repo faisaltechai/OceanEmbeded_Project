@@ -1,0 +1,29 @@
+version: "3.9"
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - OCEANEMBED_ENV=demo
+      - OCEANEMBED_CORS_ORIGINS=http://localhost:5173
+    volumes:
+      - ./data/demo:/srv/data/demo:ro
+
+  # Optional: only needed if you enable persistent app-state (users, saved views,
+  # system logs -- section 35). The scientific core works without this service.
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=oceanembed
+      - POSTGRES_USER=oceanembed
+      - POSTGRES_PASSWORD=changeme
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

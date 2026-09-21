@@ -1,0 +1,771 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OceanEmbed — Subsurface Ocean Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="assets/oceanembed-client.js"></script>
+<style>
+  :root{
+    --bg:#021B2D; --panel:#083D5C; --panel-2:#0A4F73; --line:#1A5E7A;
+    --text:#FFFFFF; --text-dim:#D6E8F2; --teal:#4FC3F7; --teal-dim:#0A4F73;
+    --sand:#E8D8A8; --red:#E2665B; --green:#5BC98A; --blue:#4FC3F7;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font-family:'Space Grotesk',system-ui,sans-serif; -webkit-font-smoothing:antialiased;}
+  .mono{font-family:'IBM Plex Mono',ui-monospace,monospace;}
+  #app{max-width:1200px;margin:0 auto;padding:0 20px 60px;}
+
+  /* ---------- Landing ---------- */
+  .hero{padding:64px 0 40px;border-bottom:1px solid var(--line);position:relative;overflow:hidden;}
+  .hero .hero-inner{position:relative;z-index:2;}
+  #globe-canvas{position:absolute;top:-40px;right:-80px;width:560px;height:560px;z-index:1;opacity:0.9;pointer-events:auto;}
+  @media(max-width:900px){#globe-canvas{opacity:0.35;right:-160px;}}
+  .hero .kicker{color:var(--teal);font-size:13px;letter-spacing:.02em;margin-bottom:14px;}
+  .hero h1{font-size:clamp(36px,6vw,58px);line-height:1.02;margin:0 0 14px;font-weight:700;
+    background:linear-gradient(180deg,#ffffff,#BEE3F5);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .hero p.lede{font-size:19px;color:var(--text-dim);max-width:560px;line-height:1.5;margin:0 0 28px;}
+  .hero .cta{display:inline-flex;align-items:center;gap:10px;background:var(--teal);color:#04283D;
+    border:none;padding:13px 22px;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;
+    box-shadow:0 8px 24px rgba(79,195,247,.25);}
+  .hero .cta:hover{background:#6FD0FA;}
+  .pillrow{display:flex;gap:10px;flex-wrap:wrap;margin-top:34px;}
+  .pill{border:1px solid var(--line);color:var(--text-dim);border-radius:100px;padding:6px 14px;font-size:12.5px;}
+  .flowstrip{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:0;margin-top:46px;
+    border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;}
+  .flowstep{padding:16px 14px;border-right:1px solid var(--line);font-size:13px;color:var(--text-dim);}
+  .flowstep:last-child{border-right:none;}
+  .flowstep b{display:block;color:var(--text);font-size:14px;margin-bottom:3px;}
+
+  /* ---------- Nav ---------- */
+  nav{position:sticky;top:0;z-index:20;background:rgba(2,27,45,.92);backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--line);display:flex;gap:2px;overflow-x:auto;padding:0 20px;}
+  nav button{background:none;border:none;color:var(--text-dim);padding:14px 14px;font-size:13.5px;
+    cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;font-family:inherit;}
+  nav button.active{color:var(--text);border-bottom:2px solid var(--teal);}
+  nav button:hover{color:var(--text);}
+
+  /* ---------- Layout bits ---------- */
+  .topbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin:22px 0 18px;}
+  .demo-tag{display:inline-flex;align-items:center;gap:6px;background:rgba(232,216,168,.12);color:var(--sand);
+    border:1px solid rgba(232,216,168,.35);border-radius:6px;padding:4px 10px;font-size:11.5px;font-weight:500;}
+  .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  select,button.ctl{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:7px;
+    padding:8px 12px;font-size:13px;font-family:inherit;}
+  .grid{display:grid;gap:16px;}
+  .grid-2{grid-template-columns:2fr 1fr;}
+  .grid-3{grid-template-columns:repeat(3,1fr);}
+  @media(max-width:820px){.grid-2,.grid-3{grid-template-columns:1fr;}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;
+    box-shadow:0 6px 20px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.03);}
+  .card h3{margin:0 0 4px;font-size:14px;color:var(--text-dim);font-weight:500;}
+  .card .big{font-size:28px;font-weight:600;margin:4px 0;}
+  .card .sub{font-size:12px;color:var(--text-dim);}
+  h2.section-title{font-size:19px;margin:0 0 14px;font-weight:600;}
+  p.hint{color:var(--text-dim);font-size:13px;margin-top:6px;}
+
+  /* map */
+  #mapWrap{position:relative;}
+  #mapSvg{width:100%;height:auto;border-radius:8px;background:#01111D;cursor:crosshair;}
+  .legend{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--text-dim);}
+  .legend-bar{height:8px;flex:1;border-radius:4px;background:linear-gradient(90deg,#083D5C,#0A4F73,#4FC3F7,#E8D8A8,#E2665B);}
+  .depth-row{display:flex;align-items:center;gap:10px;margin-top:14px;}
+  input[type=range]{flex:1;accent-color:var(--teal);}
+
+  /* event / guidance list */
+  .list-item{border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:10px;
+    background:rgba(10,79,115,.25);box-shadow:0 3px 12px rgba(0,0,0,.18);}
+  .list-item .row1{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+  .badge{font-size:11px;padding:2px 8px;border-radius:100px;font-weight:600;}
+  .badge.High{background:rgba(226,102,91,.16);color:var(--red);}
+  .badge.Medium{background:rgba(232,216,168,.16);color:var(--sand);}
+  .badge.Low{background:rgba(91,201,138,.16);color:var(--green);}
+  .reason{color:var(--text-dim);font-size:12.5px;}
+
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);}
+  th{color:var(--text-dim);font-weight:500;font-size:12px;}
+  td.num{font-family:'IBM Plex Mono',monospace;}
+
+  .barlist{display:flex;flex-direction:column;gap:10px;}
+  .barrow{display:grid;grid-template-columns:80px 1fr 46px;align-items:center;gap:10px;font-size:12.5px;}
+  .bartrack{background:var(--panel-2);border-radius:4px;height:10px;overflow:hidden;}
+  .barfill{height:100%;background:linear-gradient(90deg,var(--teal-dim),var(--teal));}
+
+  footer{color:var(--text-dim);font-size:12px;text-align:center;padding:30px 0;border-top:1px solid var(--line);margin-top:40px;}
+  .about-flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;color:var(--text-dim);font-size:13px;margin:14px 0;}
+  .about-flow span.step{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:6px 10px;color:var(--text);}
+  code.inline{background:var(--panel-2);padding:1px 6px;border-radius:4px;font-size:12.5px;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script id="oceanembed-data" type="application/json">{"dataset_label":"DEMO / PROTOTYPE DATASET (synthetic, physically-styled \u2014 not live satellite data)","depths_m":[0.0,25.0,50.0,75.0,100.0,150.0,200.0,250.0,300.0,400.0,500.0,600.0,700.0,800.0,900.0,1000.0],"regions":{"bay_of_bengal":{"region_name":"Bay of Bengal","bbox":{"lat_min":5.0,"lat_max":22.0,"lon_min":80.0,"lon_max":100.0},"lats":[5.0,6.0,7.0,8.0,9.0,10.0,11.0,12.0,13.0,14.0,15.0,16.0,17.0,18.0,19.0,20.0,21.0,22.0],"lons":[80.0,81.0,82.0,83.0,84.0,85.0,86.0,87.0,88.0,89.0,90.0,91.0,92.0,93.0,94.0,95.0,96.0,97.0,98.0,99.0,100.0],"dates":["2026-01-10","2026-01-11","2026-01-12","2026-01-13","2026-01-14","2026-01-15"],"metrics":{"model":{"rmse":0.2212215624587257,"bias":0.04484263592418324,"correlation":0.9995675015659023},"baseline_climatology":{"rmse":0.6629602997220865,"bias":0.1512296376302717,"correlation":0.9955248100703388}},"depthwise_model":[{"depth_m":0.0,"rmse":0.708,"bias":0.666,"correlation":0.9641},{"depth_m":25.0,"rmse":0.283,"bias":-0.033,"correlation":0.9702},{"depth_m":50.0,"rmse":0.246,"bias":-0.003,"correlation":0.9832},{"depth_m":75.0,"rmse":0.215,"bias":0.112,"correlation":0.9883},{"depth_m":100.0,"rmse":0.154,"bias":-0.077,"correlation":0.9907},{"depth_m":150.0,"rmse":0.239,"bias":0.232,"correlation":0.9827},{"depth_m":200.0,"rmse":0.052,"bias":-0.038,"correlation":0.9688},{"depth_m":250.0,"rmse":0.07,"bias":-0.061,"correlation":0.9214},{"depth_m":300.0,"rmse":0.028,"bias":-0.021,"correlation":0.9689},{"depth_m":400.0,"rmse":0.029,"bias":-0.011,"correlation":0.9365},{"depth_m":500.0,"rmse":0.03,"bias":-0.009,"correlation":0.9241},{"depth_m":600.0,"rmse":0.017,"bias":-0.011,"correlation":0.9825},{"depth_m":700.0,"rmse":0.032,"bias":-0.006,"correlation":0.911},{"depth_m":800.0,"rmse":0.038,"bias":-0.011,"correlation":0.8844},{"depth_m":900.0,"rmse":0.031,"bias":-0.001,"correlation":0.9056},{"depth_m":1000.0,"rmse":0.032,"bias":-0.009,"correlation":0.905}],"depthwise_baseline":[{"depth_m":0.0,"rmse":1.012,"bias":0.568,"correlation":0.0},{"depth_m":25.0,"rmse":1.195,"bias":0.607,"correlation":0.0},{"depth_m":50.0,"rmse":1.424,"bias":0.554,"correlation":0.0},{"depth_m":75.0,"rmse":1.266,"bias":0.398,"correlation":0.0},{"depth_m":100.0,"rmse":0.881,"bias":0.228,"correlation":0.0},{"depth_m":150.0,"rmse":0.327,"bias":0.052,"correlation":0.0},{"depth_m":200.0,"rmse":0.139,"bias":0.01,"correlation":0.0},{"depth_m":250.0,"rmse":0.088,"bias":0.002,"correlation":0.0},{"depth_m":300.0,"rmse":0.075,"bias":0.0,"correlation":0.0},{"depth_m":400.0,"rmse":0.071,"bias":0.0,"correlation":0.0},{"depth_m":500.0,"rmse":0.071,"bias":0.0,"correlation":0.0},{"depth_m":600.0,"rmse":0.071,"bias":0.0,"correlation":0.0},{"depth_m":700.0,"rmse":0.071,"bias":0.0,"correlation":0.0},{"depth_m":800.0,"rmse":0.071,"bias":0.0,"correlation":0.0},{"depth_m":900.0,"rmse":0.071,"bias":0.0,"correlation":0.0},{"depth_m":1000.0,"rmse":0.071,"bias":0.0,"correlation":0.0}],"argo_validation":{"n_argo_profiles":222,"rmse":0.3994,"bias":0.043,"correlation":0.9983},"explainability":{"sst":0.1868,"sss":0.2106,"ssh":0.0917,"u_current":0.0013,"v_current":0.0033,"u_wind":0.0604,"v_wind":0.3273,"lat":0.1168,"lon":0.0018},"events":[{"type":"Subsurface Cold Anomaly","severity":"High","date":"2026-01-15","lat":9.0,"lon":84.0,"depth_m":150.0,"anomaly_std":-2.2358075857192485,"anomaly_c":-0.44299042224568996,"reason":"mixed-layer depth collapsed to 50% of climatology","detection_method":"prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"},{"type":"Subsurface Heat Anomaly","severity":"High","date":"2026-01-13","lat":5.0,"lon":97.0,"depth_m":500.0,"anomaly_std":2.2354112509569934,"anomaly_c":0.08336469651752232,"reason":"mixed-layer depth collapsed to 56% of climatology","detection_method":"prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"},{"type":"Subsurface Heat Anomaly","severity":"High","date":"2026-01-13","lat":6.0,"lon":96.0,"depth_m":400.0,"anomaly_std":2.2342181796722183,"anomaly_c":0.17085871363665772,"reason":"mixed-layer depth collapsed to 56% of climatology","detection_method":"prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"},{"type":"Subsurface Heat Anomaly","severity":"High","date":"2026-01-15","lat":10.0,"lon":87.0,"depth_m":700.0,"anomaly_std":2.2333046954063898,"anomaly_c":0.17577557835456536,"reason":"mixed-layer depth collapsed to 50% of climatology","detection_method":"prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"},{"type":"Subsurface Heat Anomaly","severity":"High","date":"2026-01-13","lat":8.0,"lon":98.0,"depth_m":600.0,"anomaly_std":2.232976446007725,"anomaly_c":0.09378877872312019,"reason":"mixed-layer depth collapsed to 56% of climatology","detection_method":"prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"},{"type":"Subsurface Cold Anomaly","severity":"High","date":"2026-01-15","lat":9.0,"lon":88.0,"depth_m":100.0,"anomaly_std":-2.2308502054340775,"anomaly_c":-1.6684641191078553,"reason":"temperature anomaly -1.67C (-2.2 sigma) at 100m; mixed-layer depth collapsed to 50% of climatology","detection_method":"prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"},{"type":"Subsurface Cold Anomaly","severity":"High","date":"2026-01-15","lat":15.0,"lon":88.0,"depth_m":100.0,"anomaly_std":-2.230058654640395,"anomaly_c":-1.4103476185795163,"reason":"temperature anomaly -1.41C (-2.2 sigma) at 100m","detection_method":"prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"},{"type":"Subsurface Heat Anomaly","severity":"High","date":"2026-01-15","lat":9.0,"lon":87.0,"depth_m":500.0,"anomaly_std":2.2300408161330454,"anomaly_c":0.12233696517320469,"reason":"mixed-layer depth collapsed to 50% of climatology","detection_method":"prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"},{"type":"Subsurface Cold Anomaly","severity":"High","date":"2026-01-15","lat":11.0,"lon":86.0,"depth_m":75.0,"anomaly_std":-2.2298220026645814,"anomaly_c":-3.2745016967227105,"reason":"temperature anomaly -3.27C (-2.2 sigma) at 75m; mixed-layer depth collapsed to 50% of climatology","detection_method":"prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"},{"type":"Subsurface Cold Anomaly","severity":"High","date":"2026-01-14","lat":6.0,"lon":89.0,"depth_m":100.0,"anomaly_std":-2.2295945190631556,"anomaly_c":-1.0125255874815728,"reason":"temperature anomaly -1.01C (-2.2 sigma) at 100m; mixed-layer depth collapsed to 56% of climatology","detection_method":"prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"},{"type":"Subsurface Cold Anomaly","severity":"High","date":"2026-01-15","lat":10.0,"lon":86.0,"depth_m":75.0,"anomaly_std":-2.2293072592225514,"anomaly_c":-3.3046792145719692,"reason":"temperature anomaly -3.30C (-2.2 sigma) at 75m; mixed-layer depth collapsed to 50% of climatology","detection_method":"prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"},{"type":"Subsurface Cold Anomaly","severity":"High","date":"2026-01-15","lat":9.0,"lon":86.0,"depth_m":100.0,"anomaly_std":-2.228464231016711,"anomaly_c":-1.7511162727014131,"reason":"temperature anomaly -1.75C (-2.2 sigma) at 100m; mixed-layer depth collapsed to 50% of climatology","detection_method":"prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"}],"argo_guidance":[{"lat":8.0,"lon":85.0,"priority_score":0.8369612914616327,"reason":"high model uncertainty; sparse existing Argo coverage"},{"lat":10.0,"lon":86.0,"priority_score":0.8292275713916222,"reason":"high model uncertainty; sparse existing Argo coverage"},{"lat":9.0,"lon":84.0,"priority_score":0.8150064744998059,"reason":"high model uncertainty; sparse existing Argo coverage"},{"lat":9.0,"lon":86.0,"priority_score":0.8141534365399692,"reason":"high model uncertainty; sparse existing Argo coverage"},{"lat":11.0,"lon":86.0,"priority_score":0.8008640687058093,"reason":"high model uncertainty; sparse existing Argo coverage"},{"lat":8.0,"lon":86.0,"priority_score":0.7836084099734748,"reason":"high model uncertainty; sparse existing Argo coverage"}],"profile_samples":[{"lat":16.0,"lon":98.0,"date":"2026-01-15","predicted_temperature_c":[23.897323513776662,20.649894614357045,16.783504343729867,12.555756851825702,8.732597313655235,5.465163694519259,4.237915279273635,4.003771094766651,4.000223604710095,4.01497012868967,3.9978817453745905,4.020220953056711,4.027793778328817,4.026537069316563,4.055461466145615,4.050885372762791],"uncertainty_c":[0.19894408911234032,0.2613381628254771,0.23860196649337603,0.17580998655864574,0.11416701147457525,0.12409361190430124,0.07216137467470893,0.09064182099984414,0.08053388347534504,0.06282213264371694,0.10501549703629585,0.06103134600006511,0.07661270254328749,0.07673946051590455,0.06425206920672943,0.07877421692506736],"confidence":["High","High","High","High","High","High","High","High","High","High","High","High","High","High","High","High"],"thermocline":{"thermocline_depth_m":62.5,"thermocline_temperature_c":14.669630597777784,"max_gradient_c_per_m":-0.16910989967616658},"ocean_heat_content":{"heat_content_j_per_m2":10911190321.109083,"depth_range_m":[0,300]},"glorys_reference_c":[23.35,20.28,16.63,12.65,8.77,6.05,4.48,4.11,4.03,4.01,4.01,4.01,4.01,4.01,4.01,10.45],"argo_observed_c":[23.369410195344393,21.30532842686779,17.030017234517228,12.61032634881755,8.695735632632923,4.6780998974287185,4.237315664917926,3.781114981678937,4.373558894486125,4.020567727720549,4.613866411601579,4.288200427289036,4.323278821522976,4.111571215487115,4.103876530003201,4.259486716440364],"argo_observed_date":"2026-01-15"},{"lat":22.0,"lon":96.0,"date":"2026-01-15","predicted_temperature_c":[22.850874258174418,20.01682352616492,16.751865068250943,13.018978708751703,9.269937658598275,5.783382275128404,4.415037100436614,4.097075586331827,4.087870963205939,4.083016187446498,4.073399202522761,4.088831440056106,4.090643449144355,4.053078218231703,4.055447286923887,4.045085073319624],"uncertainty_c":[0.2700878059411,0.2132910159747571,0.2034526703342533,0.1816435511732211,0.1546644015880216,0.1092537515809844,0.07847660985468617,0.07905488830292101,0.08689717275200383,0.08806913447897315,0.07270627569250797,0.08179128688024004,0.0955652560010998,0.07176484938447499,0.1023101852950294,0.06540090711404013],"confidence":["High","High","High","High","High","High","High","High","High","High","High","High","High","High","High","High"],"thermocline":{"thermocline_depth_m":87.5,"thermocline_temperature_c":11.144458183674988,"max_gradient_c_per_m":-0.14996164200613712},"ocean_heat_content":{"heat_content_j_per_m2":11049179360.233059,"depth_range_m":[0,300]},"glorys_reference_c":[22.27,19.72,16.61,13.1,9.39,6.57,4.81,4.31,4.19,4.17,4.16,4.16,4.16,4.16,4.16,10.21],"argo_observed_c":[22.565200097668,19.76860126033677,16.914992794219064,13.830986840757548,9.444436997681363,5.52080946245685,4.218744652335995,3.677429830237883,4.537482830863136,4.125340337404481,4.207998514737455,4.7487769508812026,4.981298985847512,3.792091568058799,4.472178113039251,4.321428536332925],"argo_observed_date":"2026-01-15"},{"lat":9.0,"lon":85.0,"date":"2026-01-15","predicted_temperature_c":[22.76351177078133,16.20392595488416,11.153672072770089,7.835300013021117,5.870009292332027,4.602903875764666,4.277837790799413,4.160540448081092,4.16948955739501,4.104011471057961,4.150451019970175,4.172160275740644,4.219380815646442,4.220766163964543,4.137045146143897,4.062815973375261],"uncertainty_c":[0.5600584366641623,0.7885862786946052,0.8555085984786227,0.6617726754692267,0.3661585958365904,0.21128876637847036,0.20236484202727964,0.20697160366813816,0.34109129261441323,0.27044760904088944,0.22651762717804214,0.2425085041480019,0.22261371544768474,0.2836379359511509,0.2466878795715727,0.28835586835497046],"confidence":["Medium","Medium","Low","Medium","Medium","High","High","High","High","High","High","High","High","High","High","High"],"thermocline":{"thermocline_depth_m":12.5,"thermocline_temperature_c":19.483718862832745,"max_gradient_c_per_m":-0.26238343263588687},"ocean_heat_content":{"heat_content_j_per_m2":8777251469.253067,"depth_range_m":[0,300]},"glorys_reference_c":[21.84,16.82,12.28,8.74,6.31,4.95,4.28,4.13,4.1,4.09,4.09,4.09,4.09,4.09,4.09,10.01],"argo_observed_c":[24.40329854851478,20.85656330791995,16.152342547839144,11.76220105682487,7.920204380057418,5.38190449571531,4.402324424135011,4.137152956364824,4.0654130400623645,4.224949621735328,4.3979000550071925,4.373433968437719,4.174049813411654,4.3493502988722055,4.083924098678689,4.480870303387643],"argo_observed_date":"2026-01-13"}],"n_argo_profiles_total":222,"map_layers":{"date_used":"2026-01-15","sst":[[28.7,28.9,29.0,28.9,28.6,28.7,28.8,29.1,29.2,29.2,29.1,29.3,29.5,29.6,29.5,29.4,29.4,29.4,29.4,29.2,28.9],[28.9,28.8,28.9,28.7,28.5,28.5,28.6,28.7,28.9,28.9,28.9,28.9,29.0,29.0,29.0,28.9,28.8,28.8,28.9,29.0,28.9],[28.7,28.9,28.7,28.6,28.5,28.6,30.8,28.2,28.2,28.3,28.4,28.3,28.4,28.4,28.5,28.5,28.3,28.2,28.4,28.6,28.7],[28.5,28.6,28.5,28.2,28.4,30.8,30.7,30.3,27.6,27.7,27.8,27.9,27.9,28.1,28.1,28.0,27.9,27.9,28.0,28.2,28.3],[28.0,28.0,27.8,27.8,30.2,30.6,30.4,30.0,29.7,27.1,27.4,27.3,27.7,27.8,27.8,27.5,27.5,27.7,27.9,27.9,27.9],[27.6,27.4,27.2,27.1,27.3,29.7,29.9,29.6,27.0,27.1,27.0,27.4,27.6,27.9,27.6,27.2,27.1,27.4,27.6,27.6,27.5],[27.3,27.2,26.9,26.8,26.6,26.8,29.2,26.8,27.0,26.9,27.3,27.3,27.6,27.7,27.5,27.1,26.9,27.1,27.1,27.1,27.3],[27.2,27.2,27.0,26.7,26.5,26.3,26.5,26.9,28.8,27.2,27.0,27.2,27.2,27.3,27.1,26.9,26.9,26.9,26.7,26.7,26.8],[26.8,27.1,27.0,26.8,26.5,26.2,26.4,28.5,28.8,28.7,26.9,26.8,26.9,26.9,26.8,26.7,26.7,26.7,26.3,26.2,26.5],[26.6,26.7,26.7,26.7,26.3,26.2,28.0,28.3,28.4,28.4,28.3,26.5,26.5,26.5,26.5,26.6,26.8,26.6,26.2,26.0,26.1],[26.2,26.5,26.4,26.3,26.2,26.0,26.1,28.0,27.9,27.9,26.1,26.0,26.0,26.1,26.3,26.6,26.9,26.8,26.2,26.0,26.1],[26.3,26.1,26.1,25.9,25.7,25.8,25.7,25.6,27.4,25.5,25.6,25.6,25.8,25.8,26.1,26.4,26.7,26.5,26.2,25.9,25.9],[25.9,26.1,25.8,25.6,25.4,25.4,25.4,25.3,25.1,25.3,25.4,25.4,25.6,25.9,26.0,26.1,26.2,26.1,25.8,25.8,25.8],[25.7,25.8,25.6,25.2,25.1,25.1,25.4,25.0,25.1,25.2,25.3,25.3,25.4,25.7,25.9,26.0,25.9,25.7,25.7,25.5,25.5],[25.3,25.5,25.4,25.0,24.7,25.1,25.1,25.2,25.1,25.3,25.2,24.9,25.1,25.3,25.7,25.8,25.8,25.6,25.4,25.4,25.0],[24.6,25.1,25.0,24.6,24.4,24.6,25.2,25.1,25.2,25.0,24.8,24.7,24.6,25.1,25.3,25.5,25.4,25.2,25.1,24.7,24.6],[24.3,24.5,24.7,24.3,24.1,24.4,24.7,24.9,24.8,24.6,24.4,24.3,24.7,24.8,25.1,25.2,25.2,25.0,24.8,24.5,24.0],[23.8,24.1,24.3,24.2,23.8,24.0,24.3,24.4,24.5,24.2,24.1,24.3,24.6,24.9,24.9,24.9,24.9,24.9,24.7,24.3,24.0]],"temperature_by_depth":{"0":[[25.6,25.4,25.4,25.5,25.7,25.6,25.6,25.3,25.3,25.4,25.6,25.5,25.3,25.1,24.7,25.2,25.4,25.2,25.1,25.2,25.6],[25.4,25.2,25.1,25.2,25.3,25.2,25.0,25.0,24.8,25.1,25.5,25.5,25.4,25.0,25.0,25.1,25.6,25.5,25.4,25.4,25.5],[25.4,25.2,24.9,24.9,25.1,24.9,23.1,24.9,25.0,25.2,25.5,25.9,25.7,25.2,24.9,25.0,25.1,25.4,25.4,25.7,25.6],[25.4,25.1,24.9,24.8,24.8,22.8,23.2,23.1,25.5,25.6,25.8,25.9,25.6,25.3,25.0,24.9,25.0,24.8,25.3,25.3,25.6],[25.3,25.2,24.9,24.9,23.1,22.8,23.2,23.7,23.6,25.7,25.8,25.4,25.3,25.0,25.1,25.0,24.7,24.7,24.5,24.9,25.2],[25.0,25.2,25.0,25.1,25.1,23.4,22.9,23.3,25.5,25.5,25.2,24.8,24.2,24.3,24.6,24.9,25.0,24.4,24.4,24.4,24.9],[24.8,24.8,25.1,25.1,25.4,25.3,23.1,24.9,25.0,24.8,24.7,24.1,23.8,23.8,24.3,24.7,24.8,24.7,24.3,24.5,24.6],[24.3,24.7,24.8,25.1,25.5,25.6,25.2,24.7,22.9,24.3,24.0,23.9,23.7,23.8,24.1,24.3,24.5,24.4,24.5,24.6,24.6],[24.4,24.1,24.6,24.9,25.2,25.4,25.0,22.9,22.7,22.7,24.0,23.7,23.7,23.9,24.1,24.1,23.9,24.1,24.5,24.9,24.6],[23.9,24.0,24.1,24.5,24.9,24.8,23.2,22.6,22.5,22.6,22.8,23.9,23.6,23.9,24.2,23.9,23.7,23.8,24.6,24.9,24.7],[24.1,23.8,24.2,24.4,24.4,24.6,24.3,22.8,22.9,23.0,24.5,24.3,23.9,23.9,24.1,23.9,23.4,23.5,24.3,25.0,24.6],[23.9,23.8,24.0,24.2,24.6,24.5,24.5,24.5,23.0,24.6,24.6,24.5,24.1,23.9,23.8,23.6,23.0,23.1,23.9,24.4,24.3],[23.4,23.4,23.6,24.0,24.1,24.2,24.3,24.3,24.5,24.2,24.3,24.4,24.1,23.7,23.6,23.5,23.2,23.2,23.6,23.9,23.8],[23.2,23.1,23.4,23.9,24.0,23.8,23.4,23.9,23.7,24.0,24.1,24.4,24.0,23.5,23.4,23.4,23.2,23.3,23.3,23.6,23.2],[23.2,23.3,23.5,23.8,23.9,23.4,23.4,23.0,23.3,23.2,24.0,24.2,23.9,23.5,23.0,22.9,22.9,23.0,23.2,23.2,23.5],[23.5,23.4,23.4,23.7,23.7,23.4,22.9,22.9,22.6,23.3,23.6,24.0,24.0,23.3,23.0,22.6,22.7,22.9,22.9,23.3,23.4],[23.5,23.3,23.2,23.3,23.5,23.3,23.1,22.6,23.0,23.0,23.5,23.8,23.5,23.3,22.5,22.6,22.7,22.6,22.8,23.0,23.7],[23.5,23.3,23.0,23.2,23.5,23.3,23.2,23.0,22.7,23.2,23.3,23.2,23.3,22.6,22.5,22.4,22.9,22.5,22.6,23.0,23.3]],"200":[[4.0,4.0,4.1,4.0,3.9,4.0,4.0,4.1,4.1,4.1,4.0,4.1,4.2,4.2,4.4,4.2,4.1,4.2,4.2,4.2,4.0],[4.1,4.1,4.2,4.1,4.1,4.1,4.2,4.1,4.2,4.2,4.1,4.0,4.1,4.2,4.2,4.2,4.0,4.0,4.1,4.1,4.1],[4.0,4.1,4.2,4.1,4.1,4.2,4.1,4.1,4.1,4.1,4.0,4.0,4.0,4.0,4.2,4.1,4.1,4.0,4.0,4.0,4.1],[4.1,4.2,4.2,4.2,4.2,4.3,4.2,4.0,3.9,4.0,3.9,3.9,4.0,4.0,4.1,4.1,4.1,4.1,4.0,4.1,4.0],[4.0,4.1,4.1,4.1,4.1,4.3,4.2,4.1,4.0,3.9,3.8,3.9,4.0,4.1,4.1,4.1,4.1,4.2,4.2,4.1,4.1],[4.1,4.0,4.0,3.9,4.0,4.0,4.1,4.0,3.9,3.9,3.9,4.1,4.2,4.2,4.2,4.0,4.0,4.2,4.2,4.2,4.1],[4.1,4.1,4.0,3.9,3.8,3.9,4.0,4.0,4.0,4.0,4.1,4.3,4.3,4.4,4.2,4.1,4.0,4.1,4.2,4.1,4.2],[4.2,4.1,4.1,4.0,3.9,3.8,3.9,4.1,4.2,4.2,4.2,4.3,4.3,4.3,4.2,4.2,4.1,4.2,4.1,4.1,4.1],[4.2,4.2,4.1,4.0,3.9,3.8,4.0,4.2,4.2,4.3,4.3,4.3,4.3,4.3,4.2,4.2,4.3,4.2,4.0,4.0,4.1],[4.2,4.2,4.2,4.1,4.0,4.0,4.1,4.2,4.2,4.2,4.2,4.2,4.3,4.2,4.2,4.2,4.3,4.3,4.0,3.9,4.0],[4.2,4.3,4.2,4.1,4.1,4.0,4.1,4.2,4.1,4.2,4.0,4.1,4.2,4.2,4.2,4.3,4.5,4.4,4.1,4.0,4.0],[4.3,4.2,4.2,4.1,4.0,4.0,4.0,4.0,4.0,4.0,4.0,4.0,4.1,4.2,4.2,4.3,4.5,4.4,4.2,4.1,4.1],[4.3,4.4,4.2,4.1,4.0,4.1,4.1,4.0,4.0,4.1,4.0,4.0,4.1,4.3,4.3,4.3,4.4,4.4,4.2,4.2,4.2],[4.4,4.4,4.3,4.2,4.1,4.2,4.2,4.1,4.2,4.1,4.1,4.0,4.1,4.3,4.3,4.4,4.4,4.4,4.3,4.2,4.3],[4.3,4.3,4.2,4.1,4.0,4.2,4.2,4.4,4.2,4.3,4.2,4.0,4.1,4.3,4.5,4.5,4.4,4.4,4.4,4.4,4.2],[4.2,4.3,4.2,4.1,4.1,4.2,4.4,4.4,4.5,4.3,4.2,4.1,4.0,4.3,4.4,4.5,4.5,4.4,4.4,4.2,4.2],[4.2,4.2,4.3,4.2,4.1,4.2,4.3,4.4,4.4,4.3,4.2,4.1,4.2,4.3,4.5,4.5,4.4,4.4,4.4,4.3,4.1],[4.1,4.2,4.3,4.2,4.1,4.2,4.2,4.3,4.4,4.2,4.2,4.2,4.3,4.5,4.5,4.5,4.4,4.5,4.4,4.2,4.2]],"700":[[4.0,4.0,4.0,4.0,3.9,3.9,4.0,4.0,4.0,4.0,3.9,4.0,4.0,4.1,4.1,4.1,4.0,4.0,4.0,4.0,3.9],[3.9,4.0,4.0,4.0,4.0,4.0,4.0,4.0,4.0,4.0,3.9,3.9,4.0,4.0,4.1,4.0,3.9,4.0,4.0,4.0,4.0],[4.0,4.0,4.0,4.0,4.0,4.0,4.1,4.0,4.0,4.0,3.9,3.9,3.9,4.0,4.0,4.0,4.0,3.9,3.9,3.9,3.9],[4.0,4.0,4.0,4.0,4.0,4.2,4.0,4.0,3.9,3.9,3.8,3.9,3.9,3.9,4.0,4.0,4.0,4.0,3.9,3.9,3.9],[3.9,3.9,4.0,4.0,4.2,4.2,4.1,4.0,3.9,3.8,3.8,3.9,3.9,4.0,3.9,4.0,4.0,4.0,4.0,4.0,3.9],[4.0,3.9,3.9,3.9,3.9,4.0,4.1,4.1,3.8,3.9,3.9,4.0,4.0,4.1,4.0,3.9,3.9,4.0,4.0,4.0,4.0],[4.0,4.0,3.9,3.9,3.8,3.9,4.1,3.9,3.9,3.9,4.0,4.0,4.1,4.1,4.0,4.0,3.9,4.0,4.0,4.0,4.0],[4.0,4.0,4.0,3.9,3.8,3.8,3.9,4.0,4.0,4.0,4.0,4.1,4.1,4.1,4.0,4.0,4.0,4.0,4.0,3.9,4.0],[4.0,4.0,4.0,3.9,3.9,3.8,3.9,4.1,4.1,4.1,4.0,4.1,4.1,4.0,4.0,4.0,4.0,4.0,3.9,3.9,3.9],[4.0,4.0,4.0,4.0,3.9,3.9,3.9,4.1,4.1,4.1,4.1,4.0,4.1,4.0,4.0,4.1,4.1,4.1,3.9,3.9,3.9],[4.0,4.1,4.0,3.9,4.0,3.9,3.9,4.1,4.0,4.1,3.9,4.0,4.0,4.0,4.0,4.0,4.1,4.1,4.0,3.9,3.9],[4.0,4.0,4.0,4.0,3.9,3.9,3.9,3.9,4.0,3.9,3.9,3.9,4.0,4.0,4.0,4.1,4.2,4.2,4.0,3.9,4.0],[4.1,4.1,4.0,4.0,3.9,3.9,3.9,3.9,3.9,3.9,3.9,3.9,3.9,4.0,4.0,4.1,4.1,4.1,4.0,4.0,4.0],[4.1,4.1,4.1,4.0,3.9,4.0,4.0,3.9,4.0,4.0,3.9,3.9,3.9,4.0,4.1,4.1,4.1,4.1,4.0,4.0,4.0],[4.1,4.1,4.0,3.9,3.9,4.0,4.0,4.1,4.0,4.1,3.9,3.9,3.9,4.0,4.1,4.1,4.1,4.1,4.1,4.1,4.0],[4.0,4.0,4.0,4.0,3.9,4.0,4.1,4.1,4.1,4.0,4.0,3.9,3.9,4.1,4.1,4.1,4.1,4.1,4.1,4.0,4.0],[4.0,4.0,4.0,4.0,4.0,4.0,4.0,4.1,4.1,4.0,4.0,3.9,4.0,4.0,4.1,4.2,4.1,4.1,4.1,4.0,3.9],[3.9,4.0,4.0,4.0,3.9,4.0,4.0,4.0,4.1,4.0,4.0,4.0,4.0,4.1,4.1,4.2,4.1,4.1,4.1,4.0,3.9]]},"uncertainty_surface_mean":[[0.1,0.09,0.11,0.11,0.09,0.1,0.1,0.1,0.1,0.12,0.1,0.11,0.12,0.13,0.15,0.12,0.12,0.12,0.1,0.12,0.1],[0.11,0.09,0.11,0.11,0.09,0.1,0.1,0.1,0.1,0.12,0.11,0.1,0.1,0.12,0.1,0.12,0.1,0.1,0.1,0.1,0.1],[0.09,0.12,0.1,0.1,0.09,0.11,0.32,0.1,0.1,0.09,0.1,0.09,0.09,0.1,0.11,0.09,0.09,0.08,0.08,0.08,0.12],[0.09,0.1,0.1,0.09,0.09,0.34,0.36,0.33,0.09,0.1,0.1,0.11,0.09,0.08,0.08,0.09,0.08,0.09,0.07,0.1,0.09],[0.09,0.08,0.08,0.07,0.35,0.37,0.33,0.36,0.36,0.1,0.09,0.09,0.09,0.07,0.07,0.09,0.08,0.08,0.09,0.07,0.1],[0.08,0.08,0.07,0.07,0.07,0.35,0.34,0.31,0.09,0.1,0.09,0.09,0.1,0.1,0.07,0.07,0.08,0.09,0.07,0.08,0.08],[0.07,0.06,0.07,0.07,0.11,0.1,0.32,0.09,0.09,0.08,0.08,0.09,0.12,0.11,0.08,0.08,0.06,0.06,0.08,0.07,0.07],[0.07,0.07,0.09,0.09,0.12,0.12,0.09,0.09,0.29,0.07,0.07,0.07,0.1,0.09,0.06,0.07,0.06,0.06,0.06,0.06,0.06],[0.07,0.08,0.09,0.08,0.09,0.13,0.11,0.25,0.25,0.29,0.06,0.06,0.07,0.07,0.05,0.06,0.09,0.06,0.08,0.08,0.08],[0.09,0.07,0.06,0.07,0.09,0.1,0.23,0.27,0.28,0.24,0.28,0.07,0.07,0.06,0.04,0.06,0.08,0.06,0.09,0.09,0.1],[0.07,0.07,0.07,0.08,0.07,0.08,0.07,0.2,0.25,0.26,0.07,0.07,0.08,0.07,0.06,0.07,0.12,0.1,0.12,0.12,0.09],[0.09,0.07,0.06,0.06,0.09,0.08,0.09,0.07,0.23,0.07,0.09,0.07,0.08,0.06,0.07,0.08,0.12,0.11,0.12,0.09,0.08],[0.09,0.08,0.08,0.07,0.06,0.09,0.09,0.1,0.09,0.1,0.11,0.1,0.08,0.08,0.08,0.09,0.1,0.09,0.08,0.1,0.1],[0.09,0.1,0.08,0.09,0.08,0.08,0.1,0.09,0.11,0.09,0.08,0.1,0.09,0.08,0.1,0.09,0.1,0.09,0.08,0.09,0.09],[0.1,0.11,0.08,0.09,0.09,0.1,0.08,0.12,0.09,0.09,0.11,0.11,0.1,0.09,0.11,0.1,0.1,0.1,0.09,0.1,0.1],[0.11,0.11,0.1,0.1,0.1,0.09,0.11,0.1,0.13,0.11,0.11,0.11,0.12,0.13,0.11,0.14,0.11,0.09,0.1,0.11,0.09],[0.11,0.1,0.09,0.09,0.11,0.1,0.1,0.13,0.11,0.08,0.11,0.12,0.14,0.09,0.15,0.12,0.12,0.1,0.1,0.11,0.12],[0.12,0.12,0.1,0.1,0.12,0.11,0.1,0.11,0.11,0.12,0.1,0.11,0.12,0.14,0.1,0.11,0.12,0.12,0.11,0.11,0.14]]}},"arabian_sea":{"region_name":"Arabian Sea","bbox":{"lat_min":5.0,"lat_max":25.0,"lon_min":50.0,"lon_max":78.0},"lats":[5.0,6.0,7.0,8.0,9.0,10.0,11.0,12.0,13.0,14.0,15.0,16.0,17.0,18.0,19.0,20.0,21.0,22.0,23.0,24.0,25.0],"lons":[50.0,51.0,52.0,53.0,54.0,55.0,56.0,57.0,58.0,59.0,60.0,61.0,62.0,63.0,64.0,65.0,66.0,67.0,68.0,69.0,70.0,71.0,72.0,73.0,74.0,75.0,76.0,77.0,78.0],"dates":["2026-01-10","2026-01-11","2026-01-12","2026-01-13","2026-01-14","2026-01-15"],"metrics":{"model":{"rmse":0.2100331768932984,"bias":0.011217607538743435,"correlation":0.9994569949570027},"baseline_climatology":{"rmse":0.5944448833785044,"bias":0.12450862415132992,"correlation":0.9962478501077239}},"depthwise_model":[{"depth_m":0.0,"rmse":0.49,"bias":0.449,"correlation":0.9875},{"depth_m":25.0,"rmse":0.405,"bias":-0.245,"correlation":0.9768},{"depth_m":50.0,"rmse":0.382,"bias":-0.2,"correlation":0.9838},{"depth_m":75.0,"rmse":0.245,"bias":-0.009,"correlation":0.9811},{"depth_m":100.0,"rmse":0.176,"bias":-0.126,"correlation":0.9843},{"depth_m":150.0,"rmse":0.245,"bias":0.237,"correlation":0.9726},{"depth_m":200.0,"rmse":0.033,"bias":-0.025,"correlation":0.9881},{"depth_m":250.0,"rmse":0.033,"bias":-0.03,"correlation":0.9883},{"depth_m":300.0,"rmse":0.01,"bias":0.007,"correlation":0.9965},{"depth_m":400.0,"rmse":0.019,"bias":0.018,"correlation":0.9946},{"depth_m":500.0,"rmse":0.018,"bias":0.017,"correlation":0.9955},{"depth_m":600.0,"rmse":0.018,"bias":0.017,"correlation":0.9981},{"depth_m":700.0,"rmse":0.017,"bias":0.014,"correlation":0.9935},{"depth_m":800.0,"rmse":0.018,"bias":0.016,"correlation":0.9963},{"depth_m":900.0,"rmse":0.023,"bias":0.022,"correlation":0.9993},{"depth_m":1000.0,"rmse":0.021,"bias":0.019,"correlation":0.994}],"depthwise_baseline":[{"depth_m":0.0,"rmse":1.199,"bias":0.563,"correlation":0.0},{"depth_m":25.0,"rmse":1.112,"bias":0.514,"correlation":0.0},{"depth_m":50.0,"rmse":1.155,"bias":0.416,"correlation":0.0},{"depth_m":75.0,"rmse":1.016,"bias":0.285,"correlation":0.0},{"depth_m":100.0,"rmse":0.698,"bias":0.165,"correlation":0.0},{"depth_m":150.0,"rmse":0.259,"bias":0.04,"correlation":0.0},{"depth_m":200.0,"rmse":0.121,"bias":0.008,"correlation":0.0},{"depth_m":250.0,"rmse":0.083,"bias":0.002,"correlation":0.0},{"depth_m":300.0,"rmse":0.073,"bias":0.0,"correlation":0.0},{"depth_m":400.0,"rmse":0.07,"bias":0.0,"correlation":0.0},{"depth_m":500.0,"rmse":0.07,"bias":0.0,"correlation":0.0},{"depth_m":600.0,"rmse":0.07,"bias":0.0,"correlation":0.0},{"depth_m":700.0,"rmse":0.07,"bias":0.0,"correlation":0.0},{"depth_m":800.0,"rmse":0.07,"bias":0.0,"correlation":0.0},{"depth_m":900.0,"rmse":0.07,"bias":0.0,"correlation":0.0},{"depth_m":1000.0,"rmse":0.07,"bias":0.0,"correlation":0.0}],"argo_validation":{"n_argo_profiles":360,"rmse":0.3997,"bias":0.0198,"correlation":0.9981},"explainability":{"sst":0.2122,"sss":0.1945,"ssh":0.0665,"u_current":0.0007,"v_current":0.001,"u_wind":0.0762,"v_wind":0.2944,"lat":0.1537,"lon":0.0008},"events":[{"type":"Subsurface Cold Anomaly","severity":"High","date":"2026-01-15","lat":21.0,"lon":72.0,"depth_m":150.0,"anomaly_std":-2.2348856763322886,"anomaly_c":-0.7260724412230735,"reason":"mixed-layer depth collapsed to 50% of climatology","detection_method":"prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"},{"type":"Subsurface Cold Anomaly","severity":"High","date":"2026-01-15","lat":21.0,"lon":70.0,"depth_m":150.0,"anomaly_std":-2.234708305648456,"anomaly_c":-0.754312694707445,"reason":"mixed-layer depth collapsed to 50% of climatology","detection_method":"prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"},{"type":"Subsurface Cold Anomaly","severity":"High","date":"2026-01-15","lat":20.0,"lon":73.0,"depth_m":150.0,"anomaly_std":-2.2345011114415523,"anomaly_c":-0.7547480849827988,"reason":"mixed-layer depth collapsed to 50% of climatology","detection_method":"prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"},{"type":"Subsurface Cold Anomaly","severity":"High","date":"2026-01-15","lat":22.0,"lon":71.0,"depth_m":100.0,"anomaly_std":-2.2344017545189123,"anomaly_c":-2.4558641677095325,"reason":"temperature anomaly -2.46C (-2.2 sigma) at 100m; mixed-layer depth collapsed to 50% of climatology","detection_method":"prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"},{"type":"Subsurface Cold Anomaly","severity":"High","date":"2026-01-15","lat":19.0,"lon":71.0,"depth_m":150.0,"anomaly_std":-2.2339810815767613,"anomaly_c":-0.850886574563682,"reason":"temperature anomaly -0.85C (-2.2 sigma) at 150m; mixed-layer depth collapsed to 50% of climatology","detection_method":"prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"},{"type":"Subsurface Heat Anomaly","severity":"High","date":"2026-01-15","lat":18.0,"lon":71.0,"depth_m":400.0,"anomaly_std":2.2336654208471614,"anomaly_c":0.1672600974753644,"reason":"mixed-layer depth collapsed to 50% of climatology","detection_method":"prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"},{"type":"Subsurface Cold Anomaly","severity":"High","date":"2026-01-15","lat":19.0,"lon":70.0,"depth_m":100.0,"anomaly_std":-2.2333740498317107,"anomaly_c":-2.472312926860443,"reason":"temperature anomaly -2.47C (-2.2 sigma) at 100m; mixed-layer depth collapsed to 50% of climatology","detection_method":"prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"},{"type":"Subsurface Cold Anomaly","severity":"High","date":"2026-01-14","lat":22.0,"lon":56.0,"depth_m":150.0,"anomaly_std":-2.233372240894275,"anomaly_c":-0.5442106578454151,"reason":"mixed-layer depth collapsed to 52% of climatology","detection_method":"prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"},{"type":"Subsurface Cold Anomaly","severity":"High","date":"2026-01-15","lat":20.0,"lon":68.0,"depth_m":100.0,"anomaly_std":-2.233033251542526,"anomaly_c":-2.464205659317906,"reason":"temperature anomaly -2.46C (-2.2 sigma) at 100m; mixed-layer depth collapsed to 50% of climatology","detection_method":"prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"},{"type":"Subsurface Cold Anomaly","severity":"High","date":"2026-01-15","lat":19.0,"lon":72.0,"depth_m":100.0,"anomaly_std":-2.2330153938964696,"anomaly_c":-2.3657980744691613,"reason":"temperature anomaly -2.37C (-2.2 sigma) at 100m; mixed-layer depth collapsed to 50% of climatology","detection_method":"prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"},{"type":"Subsurface Cold Anomaly","severity":"High","date":"2026-01-15","lat":20.0,"lon":69.0,"depth_m":150.0,"anomaly_std":-2.2328917634609513,"anomaly_c":-0.7496010357211444,"reason":"mixed-layer depth collapsed to 50% of climatology","detection_method":"prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"},{"type":"Subsurface Cold Anomaly","severity":"High","date":"2026-01-15","lat":19.0,"lon":73.0,"depth_m":100.0,"anomaly_std":-2.232833054168323,"anomaly_c":-2.6799670709055503,"reason":"temperature anomaly -2.68C (-2.2 sigma) at 100m; mixed-layer depth collapsed to 50% of climatology","detection_method":"prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"}],"argo_guidance":[{"lat":20.0,"lon":69.0,"priority_score":0.8719890691339998,"reason":"high model uncertainty; sparse existing Argo coverage; strong local anomaly"},{"lat":20.0,"lon":72.0,"priority_score":0.8406806462313814,"reason":"high model uncertainty; sparse existing Argo coverage"},{"lat":22.0,"lon":71.0,"priority_score":0.8335084650808858,"reason":"high model uncertainty; sparse existing Argo coverage"},{"lat":19.0,"lon":69.0,"priority_score":0.7973541476746183,"reason":"high model uncertainty; sparse existing Argo coverage"},{"lat":21.0,"lon":73.0,"priority_score":0.7971114894270349,"reason":"high model uncertainty; sparse existing Argo coverage"},{"lat":18.0,"lon":71.0,"priority_score":0.7961692361134914,"reason":"high model uncertainty; sparse existing Argo coverage"}],"profile_samples":[{"lat":11.0,"lon":51.0,"date":"2026-01-15","predicted_temperature_c":[24.621251547076348,20.828090750739257,16.371023748738082,11.696694099788036,7.84339312846126,4.975600949198151,4.062805047416032,3.9469501212756457,3.968863349017924,3.963800947658073,3.9598415306763832,3.958722160810262,3.9658394666410453,3.963795247308859,3.9635980705120963,3.965618107786617],"uncertainty_c":[0.14886876251324185,0.09935309974732098,0.06866833304109404,0.06828006868383109,0.07582219852275353,0.0461239852527436,0.032919536491539204,0.04009766034005576,0.026025777711332836,0.03142044597600178,0.040243431405616016,0.021567164428576417,0.0307327441914275,0.03637413867263059,0.03442930236182912,0.024717753969532047],"confidence":["High","High","High","High","High","High","High","High","High","High","High","High","High","High","High","High"],"thermocline":{"thermocline_depth_m":62.5,"thermocline_temperature_c":14.03385892426306,"max_gradient_c_per_m":-0.18697318595800183},"ocean_heat_content":{"heat_content_j_per_m2":10548387714.155037,"depth_range_m":[0,300]},"glorys_reference_c":[24.25,20.71,16.5,12.08,8.15,5.64,4.34,4.08,4.03,4.02,4.02,4.02,4.02,4.02,4.02,10.78],"argo_observed_c":[23.979332219868763,21.438509663577896,16.850849111010678,11.852781030308694,7.820207974517388,5.439495240765631,4.705014503548771,3.8397618651670347,3.9183524584560265,4.3722525154145755,3.6763222448950557,4.095554877212217,3.9721518624417786,3.709784886928258,3.8748112902640304,3.405719903074429],"argo_observed_date":"2026-01-15"},{"lat":12.0,"lon":69.0,"date":"2026-01-15","predicted_temperature_c":[23.976433906498713,20.222735743209714,15.953374628468595,11.560562840346861,7.907678824356895,5.094127824508079,4.146357176563394,4.007128789656077,4.010081641567619,4.008160759922122,4.017710330859289,4.018800600177448,4.017794848807188,4.0087655132362645,4.0061921383255505,4.017061402363671],"uncertainty_c":[0.14126560164459903,0.12100302351254738,0.12087684442081031,0.10217847500677146,0.07664720052076071,0.06135976132011528,0.05404540429917842,0.04157366991942977,0.041521988462611924,0.020166915300977164,0.0350995367481042,0.03584454788350304,0.03398268128713848,0.06073315884831108,0.061637789057592526,0.04452870546357177],"confidence":["High","High","High","High","High","High","High","High","High","High","High","High","High","High","High","High"],"thermocline":{"thermocline_depth_m":62.5,"thermocline_temperature_c":13.756968734407728,"max_gradient_c_per_m":-0.17571247152486932},"ocean_heat_content":{"heat_content_j_per_m2":10464401056.54534,"depth_range_m":[0,300]},"glorys_reference_c":[23.59,20.11,16.09,11.92,8.15,5.69,4.37,4.08,4.02,4.01,4.01,4.01,4.01,4.01,4.01,10.54],"argo_observed_c":[23.395807101575297,19.840360114986048,16.95898405807634,12.068467003176496,8.442972237159275,4.9786299305380775,4.5155390789020515,4.474091589385576,4.3584988940874965,4.318505083793811,3.6775073452160187,4.146668859482032,3.80944115293492,3.5832289296659883,3.5968260186361563,4.145926318869807],"argo_observed_date":"2026-01-15"},{"lat":10.0,"lon":57.0,"date":"2026-01-15","predicted_temperature_c":[24.662470553948232,20.713010234054074,16.18006107960801,11.534025560288871,7.764993050954423,4.96287005614059,4.068002256403461,3.9637653946245655,3.978778928861451,3.982821676347765,3.9816637248532665,3.9812513815399333,3.977544518324997,3.9772941258086925,3.992139472384254,3.978918414440888],"uncertainty_c":[0.09796470308011923,0.06871369234190018,0.07850156161226352,0.07884158868861033,0.06285178984844902,0.046808356336976914,0.03154086621033613,0.03687007164791953,0.03242949462971797,0.03306099420154663,0.043912041293986626,0.03042873063577153,0.03817857256127135,0.04172993694231505,0.05419357085009512,0.0397114858738561],"confidence":["High","High","High","High","High","High","High","High","High","High","High","High","High","High","High","High"],"thermocline":{"thermocline_depth_m":62.5,"thermocline_temperature_c":13.85704331994844,"max_gradient_c_per_m":-0.18584142077276553},"ocean_heat_content":{"heat_content_j_per_m2":10493322297.231928,"depth_range_m":[0,300]},"glorys_reference_c":[24.22,20.52,16.27,11.88,8.03,5.59,4.32,4.06,4.01,4.0,4.0,4.0,4.0,4.0,4.0,10.75],"argo_observed_c":null,"argo_observed_date":null}],"n_argo_profiles_total":360,"map_layers":{"date_used":"2026-01-15","sst":[[28.8,28.8,28.8,28.6,28.6,28.8,28.8,28.8,28.6,28.7,29.0,29.3,29.3,29.0,28.9,28.9,28.9,29.2,29.1,28.9,28.8,28.9,29.0,28.9,29.1,29.1,29.1,29.0,28.8],[28.8,28.9,28.6,28.4,28.4,28.6,28.7,28.5,28.3,28.4,28.8,29.0,28.7,28.6,28.6,28.7,28.9,28.9,28.9,28.6,28.7,28.7,28.7,28.6,28.5,28.5,28.6,28.7,28.8],[28.6,28.6,28.5,28.4,28.3,28.4,28.5,28.2,28.0,28.1,28.5,28.5,28.2,28.1,28.3,28.6,28.6,28.5,28.3,28.2,28.2,28.6,28.6,28.4,28.1,27.9,27.9,28.2,28.3],[28.0,28.2,28.4,28.3,28.1,28.1,27.9,27.9,27.6,27.9,28.2,28.1,27.9,27.7,27.9,28.1,28.2,28.0,27.8,27.7,28.0,28.3,28.7,28.5,27.9,27.5,27.4,27.6,27.8],[27.6,27.9,28.0,28.1,28.0,27.7,27.8,27.5,27.8,28.0,28.2,28.1,27.7,27.4,27.3,27.6,27.7,27.7,27.6,27.5,27.6,28.2,28.5,28.5,27.9,27.2,27.2,27.3,27.4],[27.3,27.4,27.7,27.7,27.7,27.6,27.3,27.4,27.6,28.1,28.2,28.1,27.7,27.2,27.0,27.2,27.6,27.5,27.5,27.4,27.5,27.6,28.2,28.1,27.7,27.3,27.1,27.3,27.1],[27.0,27.1,27.2,27.2,27.2,27.1,27.1,27.0,27.2,27.7,27.8,27.7,27.5,27.1,27.0,27.4,27.4,27.4,27.1,27.2,27.0,27.3,27.5,27.8,27.4,27.1,27.0,26.9,27.0],[26.8,26.9,26.8,26.6,26.5,26.6,26.6,26.5,26.7,26.9,27.0,27.0,27.2,27.1,27.3,27.5,27.5,26.9,26.9,26.8,26.9,26.8,27.3,27.3,27.2,26.7,26.6,26.6,26.6],[26.6,26.7,26.4,26.2,26.1,26.2,26.3,26.3,26.2,26.4,26.3,26.7,26.9,27.1,27.1,27.4,27.0,26.9,26.6,26.9,26.7,26.8,26.9,27.1,26.8,26.6,26.3,26.3,26.4],[26.4,26.4,26.2,26.0,26.1,26.3,26.4,26.2,26.2,26.2,26.3,26.5,26.9,26.8,26.7,26.5,26.6,26.5,26.9,26.9,26.9,26.7,26.6,26.7,26.7,26.4,26.4,26.2,26.3],[26.1,26.1,26.0,26.1,26.2,26.4,26.4,26.0,25.9,25.9,26.1,26.3,26.4,26.3,25.9,25.8,25.8,26.4,26.7,27.1,26.8,26.6,26.5,26.5,26.5,26.5,26.1,26.2,26.0],[25.8,25.9,26.1,26.0,26.3,26.4,26.1,25.8,25.4,25.6,25.7,25.9,25.9,25.7,25.5,25.3,25.6,25.9,26.4,26.5,26.5,26.3,26.2,26.4,26.5,26.3,26.2,25.9,25.8],[25.5,25.8,25.8,25.9,25.9,25.8,25.6,25.3,25.4,25.4,25.5,25.4,25.4,25.3,25.3,25.3,25.4,25.7,25.8,26.0,26.1,25.9,25.9,26.0,26.3,26.2,25.8,25.7,25.5],[25.1,25.2,25.2,25.1,25.0,24.9,24.7,24.9,25.1,25.4,25.5,25.4,25.1,25.1,25.2,25.2,25.2,25.4,25.4,25.6,25.8,27.9,25.3,25.5,25.6,25.6,25.4,25.2,25.0],[24.6,24.7,24.6,24.5,24.4,24.3,24.2,24.6,25.1,25.3,25.4,25.4,25.2,25.2,25.2,25.0,25.1,25.1,25.3,27.7,27.9,27.6,27.3,27.1,25.1,25.0,24.9,24.7,24.5],[24.1,24.4,24.3,24.4,24.4,24.2,24.3,24.6,25.0,25.0,25.0,25.0,25.2,25.2,25.2,25.1,24.9,25.2,27.5,27.6,27.5,27.1,26.9,27.0,27.0,24.8,24.6,24.3,24.1],[24.2,24.2,24.4,24.4,24.3,24.1,24.1,24.5,24.7,24.4,24.1,24.4,24.6,25.2,25.2,24.9,24.9,24.7,24.9,27.1,26.9,26.7,26.7,26.8,24.6,24.7,24.6,24.3,24.0],[24.3,24.4,24.3,24.3,24.1,23.9,23.9,24.2,24.2,23.9,23.5,23.5,24.2,24.6,24.7,24.5,24.0,24.1,24.0,24.2,24.2,26.4,24.2,24.2,24.4,24.5,24.7,24.4,24.2],[24.2,24.4,24.4,24.3,24.1,23.9,23.9,23.8,23.9,23.4,23.3,23.4,23.6,24.1,24.1,23.7,23.7,23.5,23.6,23.7,23.8,24.0,23.9,24.0,23.9,24.3,24.4,24.2,24.1],[23.8,23.9,24.1,24.1,23.9,23.8,23.5,23.7,23.3,23.4,23.3,23.5,23.7,23.7,23.7,23.6,23.4,23.5,23.5,23.4,23.5,23.5,23.7,23.5,23.7,23.8,24.0,23.8,23.6],[23.1,23.3,23.4,23.4,23.3,23.3,23.3,23.1,23.2,23.0,23.4,23.6,23.5,23.6,23.4,23.2,23.3,23.4,23.4,23.2,23.1,23.3,23.3,23.4,23.4,23.6,23.6,23.3,23.1]],"temperature_by_depth":{"0":[[25.4,25.2,25.3,25.4,25.4,25.4,25.5,25.6,25.5,25.0,24.9,24.7,25.0,25.3,25.3,25.4,25.4,25.1,25.2,25.3,25.2,25.1,25.1,25.7,25.8,25.7,25.1,25.0,25.0],[24.7,24.9,25.0,25.3,25.4,25.1,24.9,25.3,25.3,25.4,24.9,24.8,25.1,25.1,25.4,25.0,24.9,24.8,24.9,24.9,24.8,24.9,25.1,25.5,25.8,25.7,25.5,25.1,25.1],[24.9,24.7,24.9,25.2,25.1,24.8,24.7,25.1,25.4,25.3,25.3,25.2,25.3,25.5,25.2,25.1,24.7,24.8,24.9,24.8,24.7,24.7,25.1,25.1,25.4,25.7,25.7,25.4,24.8],[24.8,24.5,24.6,24.8,24.9,24.8,24.9,25.0,25.2,25.2,25.0,25.3,25.6,25.5,25.4,24.9,24.8,24.9,25.1,25.1,24.6,24.5,24.3,24.6,24.9,25.4,25.6,25.3,25.0],[24.9,24.4,24.2,24.4,24.8,24.7,24.7,24.9,24.9,24.7,24.5,24.8,25.1,25.5,25.2,24.9,24.6,24.7,25.2,25.0,24.6,24.1,23.9,23.9,24.4,25.2,25.4,25.4,25.1],[24.9,24.4,24.0,24.3,24.6,24.7,24.6,24.7,24.6,24.2,24.0,24.1,24.6,25.0,25.1,24.6,24.1,24.4,24.6,24.6,24.4,24.1,23.7,23.6,24.2,24.7,24.9,24.9,25.0],[24.7,24.6,24.2,24.3,24.7,24.6,24.4,24.4,24.4,24.4,23.9,23.9,24.0,24.4,24.5,24.1,23.9,23.8,24.1,24.1,24.4,24.1,23.8,23.5,23.8,24.3,24.4,24.6,24.8],[24.7,24.4,24.6,24.6,24.9,24.6,24.4,24.3,24.6,24.4,24.3,23.7,23.6,23.8,24.1,23.8,23.6,23.7,23.8,24.0,24.0,24.1,23.5,23.3,23.4,23.9,24.4,24.6,24.5],[24.1,24.3,24.3,24.7,24.7,24.5,24.2,24.4,24.5,24.7,24.3,23.8,23.3,23.5,23.8,23.7,23.5,23.4,23.6,23.5,24.0,23.7,23.6,23.2,23.4,23.9,24.4,24.5,24.4],[23.9,23.7,23.9,24.1,24.1,23.9,24.1,24.3,24.7,24.4,24.0,23.6,23.0,23.4,23.7,23.9,23.5,23.3,23.2,23.4,23.4,23.6,23.3,23.4,23.5,23.9,24.2,24.3,24.0],[23.6,23.3,23.4,23.5,23.5,23.3,23.6,24.3,24.2,24.1,23.7,23.2,23.1,23.2,24.0,23.9,23.6,23.3,23.0,23.1,23.3,23.3,23.2,23.1,23.3,23.5,24.0,23.9,23.7],[23.4,23.2,22.9,23.1,23.1,23.1,23.4,23.8,24.1,23.8,23.4,23.2,23.1,23.6,23.8,24.0,23.7,23.3,23.1,23.0,23.3,23.3,23.1,22.9,22.9,23.1,23.3,23.5,23.5],[23.5,23.1,23.0,23.0,23.1,23.3,23.4,23.7,23.7,23.5,23.2,23.1,23.4,23.5,23.8,23.8,23.6,23.2,23.0,23.1,23.1,23.2,23.0,22.9,22.7,22.7,23.0,23.2,23.4],[23.4,23.2,23.2,23.3,23.7,23.6,23.8,23.5,23.5,23.2,23.0,23.1,23.2,23.5,23.6,23.6,23.4,23.1,23.1,22.9,22.9,20.2,23.1,22.9,22.9,22.8,22.9,23.3,23.4],[23.6,23.5,23.6,23.8,23.7,23.9,23.4,23.2,22.9,22.9,22.9,22.7,23.0,23.0,23.1,23.1,23.0,22.8,22.7,20.5,20.7,20.7,20.7,20.7,23.0,22.9,23.3,23.5,23.8],[23.9,23.5,23.6,23.4,23.6,23.4,23.2,22.6,22.8,22.8,22.8,22.8,22.7,22.6,22.6,22.4,22.4,22.2,20.2,20.3,20.1,20.6,21.0,20.9,20.8,22.8,23.1,23.8,23.8],[23.3,23.3,23.0,23.0,22.9,23.1,22.8,22.5,22.6,22.9,23.2,23.1,22.8,22.6,22.2,22.1,22.0,22.4,22.2,20.2,20.1,19.8,20.3,20.7,22.6,22.5,22.6,23.2,23.5],[22.9,22.6,22.5,22.4,22.8,23.1,22.7,22.5,22.6,22.9,23.2,23.2,22.9,22.4,22.3,22.0,22.8,22.6,23.1,22.8,22.6,20.2,22.4,22.7,22.5,22.2,22.2,22.5,22.8],[22.3,22.1,22.1,22.3,22.6,22.9,22.9,22.6,22.6,22.8,23.0,23.0,22.5,22.3,22.1,22.6,22.8,23.4,23.1,23.2,22.7,22.4,22.6,22.5,22.7,22.1,21.8,22.0,22.3],[22.5,22.1,22.0,22.1,22.5,22.8,22.9,22.9,22.6,22.4,22.5,22.4,22.2,22.3,22.5,22.6,23.0,22.8,23.1,23.0,22.7,22.5,22.3,22.8,22.4,21.9,21.5,21.8,22.2],[22.4,22.4,22.1,22.2,22.3,22.4,22.6,22.7,22.4,22.1,21.8,21.8,21.9,22.0,22.5,22.7,22.5,22.5,22.4,22.5,22.3,22.1,22.1,22.4,22.5,21.9,21.7,21.8,22.2]],"200":[[4.0,4.1,4.0,4.0,4.0,4.0,4.0,4.0,4.0,4.1,4.2,4.3,4.2,4.1,4.1,4.0,4.1,4.2,4.1,4.1,4.1,4.1,4.1,4.0,4.0,4.1,4.2,4.2,4.1],[4.2,4.2,4.1,4.0,4.0,4.1,4.2,4.0,4.0,4.0,4.2,4.2,4.1,4.1,4.0,4.1,4.2,4.2,4.2,4.2,4.2,4.2,4.1,4.0,3.9,4.0,4.0,4.1,4.2],[4.2,4.2,4.1,4.0,4.1,4.1,4.2,4.0,4.0,4.0,4.1,4.1,4.0,3.9,4.0,4.1,4.2,4.2,4.1,4.1,4.1,4.2,4.1,4.1,4.0,3.9,3.9,4.0,4.1],[4.1,4.2,4.2,4.2,4.1,4.1,4.1,4.0,4.0,4.0,4.1,4.0,3.9,3.9,4.0,4.1,4.1,4.1,4.0,4.0,4.1,4.2,4.3,4.2,4.0,3.9,3.8,3.9,4.0],[4.0,4.2,4.3,4.2,4.1,4.1,4.1,4.0,4.0,4.2,4.2,4.2,4.0,3.9,3.9,4.0,4.1,4.1,4.0,4.0,4.1,4.3,4.4,4.4,4.2,3.9,3.9,3.9,4.0],[4.0,4.1,4.3,4.2,4.1,4.1,4.1,4.1,4.1,4.3,4.3,4.3,4.1,4.0,3.9,4.0,4.2,4.1,4.1,4.0,4.2,4.2,4.4,4.4,4.2,4.0,3.9,4.0,4.0],[4.0,4.1,4.2,4.1,4.0,4.0,4.1,4.1,4.1,4.2,4.3,4.3,4.3,4.1,4.0,4.2,4.3,4.3,4.2,4.2,4.1,4.2,4.3,4.4,4.3,4.1,4.1,4.0,4.0],[4.0,4.1,4.0,4.0,3.9,4.0,4.0,4.0,4.0,4.1,4.1,4.2,4.3,4.2,4.2,4.3,4.4,4.2,4.2,4.2,4.2,4.1,4.3,4.4,4.3,4.2,4.0,4.0,4.0],[4.1,4.1,4.0,3.9,3.9,4.0,4.0,4.0,3.9,3.9,4.0,4.2,4.3,4.3,4.3,4.3,4.3,4.3,4.2,4.3,4.2,4.2,4.3,4.4,4.3,4.2,4.0,4.0,4.0],[4.1,4.2,4.1,4.0,4.0,4.1,4.1,4.0,3.9,4.0,4.1,4.2,4.4,4.3,4.2,4.2,4.2,4.3,4.4,4.3,4.4,4.2,4.3,4.3,4.3,4.1,4.1,4.0,4.1],[4.2,4.3,4.2,4.2,4.2,4.3,4.2,4.0,4.0,4.0,4.1,4.3,4.3,4.3,4.1,4.0,4.1,4.3,4.4,4.5,4.3,4.3,4.3,4.4,4.3,4.2,4.1,4.1,4.1],[4.2,4.2,4.3,4.3,4.4,4.4,4.2,4.1,4.0,4.1,4.2,4.2,4.2,4.1,4.1,4.0,4.1,4.2,4.3,4.4,4.3,4.3,4.3,4.4,4.4,4.3,4.2,4.2,4.2],[4.1,4.2,4.3,4.3,4.3,4.2,4.2,4.0,4.1,4.1,4.2,4.2,4.1,4.1,4.0,4.0,4.1,4.2,4.3,4.3,4.3,4.3,4.3,4.3,4.4,4.4,4.3,4.2,4.2],[4.1,4.2,4.1,4.1,4.0,4.0,4.0,4.0,4.1,4.2,4.2,4.2,4.1,4.1,4.1,4.0,4.1,4.2,4.2,4.3,4.3,4.4,4.2,4.3,4.3,4.3,4.3,4.1,4.1],[4.0,4.0,4.0,3.9,4.0,3.9,3.9,4.1,4.2,4.3,4.3,4.3,4.2,4.2,4.2,4.2,4.2,4.3,4.3,4.2,4.3,4.1,4.3,4.0,4.2,4.2,4.1,4.0,3.9],[3.9,4.0,4.0,4.0,4.0,4.0,4.0,4.2,4.2,4.2,4.2,4.3,4.3,4.3,4.4,4.3,4.3,4.4,4.4,4.3,4.3,4.2,4.1,4.0,4.1,4.2,4.1,4.0,3.9],[4.0,4.0,4.1,4.1,4.1,4.0,4.1,4.3,4.3,4.1,4.0,4.1,4.2,4.3,4.4,4.4,4.4,4.3,4.3,4.2,4.3,4.2,4.3,4.1,4.2,4.3,4.2,4.1,4.0],[4.2,4.2,4.2,4.3,4.2,4.0,4.1,4.2,4.2,4.0,3.9,4.0,4.1,4.3,4.4,4.4,4.1,4.2,4.0,4.2,4.2,4.2,4.2,4.2,4.2,4.3,4.4,4.3,4.2],[4.3,4.4,4.4,4.3,4.2,4.1,4.1,4.1,4.2,4.0,4.0,4.0,4.1,4.3,4.3,4.1,4.1,4.0,4.0,4.0,4.1,4.2,4.2,4.2,4.2,4.4,4.4,4.3,4.3],[4.2,4.3,4.3,4.3,4.2,4.2,4.1,4.1,4.1,4.2,4.1,4.2,4.2,4.2,4.2,4.2,4.0,4.1,4.0,4.0,4.1,4.2,4.2,4.1,4.2,4.3,4.4,4.4,4.2],[4.1,4.1,4.2,4.2,4.2,4.1,4.1,4.0,4.1,4.2,4.3,4.3,4.3,4.3,4.1,4.1,4.2,4.2,4.1,4.1,4.1,4.2,4.2,4.1,4.1,4.3,4.3,4.3,4.2]],"700":[[4.0,4.0,4.0,3.9,4.0,4.0,4.0,4.0,4.0,4.0,4.1,4.1,4.1,4.0,4.0,4.0,4.0,4.0,4.0,4.0,4.0,4.0,4.0,4.0,3.9,4.0,4.0,4.0,4.0],[4.1,4.0,4.0,4.0,4.0,4.0,4.0,4.0,4.0,4.0,4.0,4.1,4.0,4.0,4.0,4.0,4.1,4.1,4.1,4.0,4.0,4.0,4.0,4.0,3.9,3.9,4.0,4.0,4.0],[4.0,4.1,4.0,4.0,4.0,4.0,4.0,4.0,3.9,3.9,4.0,4.0,3.9,3.9,4.0,4.0,4.1,4.0,4.0,4.0,4.0,4.1,4.0,4.0,3.9,3.8,3.9,3.9,4.0],[4.0,4.0,4.1,4.0,4.0,4.0,4.0,4.0,3.9,3.9,4.0,3.9,3.9,3.9,3.9,4.0,4.0,4.0,3.9,3.9,4.0,4.0,4.1,4.1,4.0,3.9,3.8,3.9,3.9],[3.9,4.1,4.1,4.1,4.0,4.0,4.0,4.0,4.0,4.0,4.1,4.0,3.9,3.8,3.9,3.9,4.0,4.0,3.9,4.0,4.0,4.1,4.2,4.1,4.0,3.9,3.9,3.9,3.9],[3.9,4.0,4.1,4.0,4.0,4.0,4.0,4.0,4.0,4.1,4.1,4.1,4.0,3.9,3.9,4.0,4.0,4.0,4.0,4.0,4.0,4.1,4.2,4.2,4.1,3.9,3.9,3.9,3.9],[3.9,4.0,4.0,4.0,4.0,4.0,4.0,4.0,4.0,4.1,4.1,4.1,4.1,4.0,4.0,4.0,4.1,4.1,4.0,4.0,4.0,4.1,4.1,4.2,4.1,4.0,4.0,3.9,3.9],[3.9,4.0,3.9,3.9,3.9,3.9,4.0,4.0,3.9,4.0,4.0,4.1,4.1,4.1,4.0,4.1,4.1,4.0,4.1,4.0,4.0,4.0,4.1,4.2,4.1,4.0,3.9,3.9,3.9],[4.0,4.0,4.0,3.9,3.9,3.9,3.9,3.9,3.9,3.9,3.9,4.0,4.1,4.1,4.1,4.1,4.1,4.1,4.0,4.1,4.0,4.1,4.1,4.1,4.1,4.0,3.9,3.9,3.9],[4.0,4.0,4.0,3.9,3.9,4.0,4.0,3.9,3.9,3.9,4.0,4.1,4.2,4.1,4.1,4.0,4.1,4.1,4.1,4.1,4.1,4.1,4.1,4.1,4.1,4.0,4.0,3.9,4.0],[4.0,4.1,4.0,4.0,4.0,4.1,4.0,3.9,3.9,3.9,4.0,4.1,4.1,4.1,4.0,4.0,4.0,4.1,4.1,4.2,4.1,4.1,4.1,4.1,4.1,4.0,4.0,4.0,4.0],[4.0,4.0,4.1,4.1,4.1,4.1,4.0,4.0,3.9,3.9,4.0,4.0,4.1,4.0,4.0,3.9,4.0,4.0,4.1,4.1,4.1,4.1,4.1,4.2,4.2,4.1,4.1,4.0,4.0],[4.0,4.1,4.1,4.1,4.1,4.0,4.0,3.9,4.0,4.0,4.0,4.0,4.0,4.0,3.9,3.9,4.0,4.0,4.0,4.1,4.1,4.1,4.1,4.1,4.2,4.2,4.1,4.0,4.0],[4.0,4.0,4.0,4.0,3.9,3.9,3.9,3.9,4.0,4.0,4.0,4.0,4.0,4.0,4.0,3.9,4.0,4.0,4.0,4.1,4.1,4.2,4.0,4.1,4.1,4.1,4.1,4.0,3.9],[3.9,3.9,3.9,3.9,3.9,3.8,3.9,3.9,4.0,4.0,4.1,4.1,4.0,4.0,4.0,4.0,4.0,4.0,4.1,4.2,4.1,4.1,4.1,4.0,4.0,4.0,4.0,3.9,3.9],[3.8,3.9,3.9,3.9,3.9,3.9,3.9,4.0,4.0,4.0,4.0,4.0,4.1,4.1,4.1,4.1,4.1,4.1,4.2,4.1,4.0,4.2,4.0,3.9,4.1,4.0,4.0,3.9,3.8],[3.9,3.9,4.0,4.0,4.0,3.9,4.0,4.0,4.0,4.0,3.9,4.0,4.0,4.1,4.2,4.1,4.2,4.1,4.1,4.1,4.2,4.2,4.1,4.0,4.0,4.1,4.0,4.0,3.9],[4.0,4.0,4.0,4.0,4.0,3.9,4.0,4.0,4.0,3.9,3.9,3.9,4.0,4.1,4.1,4.1,4.0,4.0,3.9,4.0,4.0,4.2,4.0,4.0,4.0,4.1,4.1,4.1,4.0],[4.1,4.1,4.1,4.1,4.0,4.0,4.0,4.0,4.0,3.9,3.9,3.9,3.9,4.1,4.1,4.0,4.0,3.9,3.9,3.9,4.0,4.0,4.0,4.0,4.0,4.1,4.2,4.1,4.1],[4.0,4.0,4.1,4.1,4.0,4.0,3.9,3.9,4.0,4.0,4.0,4.0,4.0,4.0,4.0,4.0,3.9,3.9,3.9,3.9,4.0,4.0,4.0,4.0,4.0,4.0,4.2,4.1,4.0],[3.9,4.0,4.0,4.0,4.0,3.9,3.9,3.9,4.0,4.0,4.1,4.1,4.0,4.0,4.0,3.9,4.0,4.0,4.0,4.0,4.0,4.0,4.0,4.0,4.0,4.1,4.1,4.0,4.0]]},"uncertainty_surface_mean":[[0.07,0.08,0.1,0.1,0.09,0.09,0.08,0.09,0.11,0.11,0.1,0.11,0.1,0.1,0.1,0.09,0.08,0.1,0.1,0.1,0.09,0.09,0.09,0.08,0.11,0.1,0.1,0.08,0.08],[0.1,0.08,0.08,0.08,0.08,0.08,0.1,0.08,0.07,0.09,0.09,0.1,0.09,0.09,0.07,0.09,0.1,0.09,0.1,0.09,0.1,0.08,0.08,0.09,0.1,0.09,0.09,0.09,0.08],[0.07,0.07,0.08,0.07,0.07,0.08,0.08,0.07,0.08,0.09,0.09,0.08,0.08,0.08,0.07,0.07,0.08,0.07,0.08,0.07,0.08,0.08,0.07,0.08,0.09,0.1,0.09,0.07,0.07],[0.08,0.07,0.09,0.07,0.07,0.07,0.07,0.07,0.07,0.07,0.08,0.06,0.08,0.07,0.07,0.07,0.07,0.07,0.08,0.06,0.09,0.09,0.1,0.08,0.08,0.08,0.1,0.09,0.08],[0.06,0.08,0.08,0.07,0.07,0.06,0.06,0.06,0.06,0.07,0.08,0.07,0.07,0.08,0.08,0.06,0.06,0.06,0.07,0.07,0.07,0.11,0.1,0.11,0.08,0.08,0.08,0.08,0.08],[0.06,0.07,0.08,0.07,0.06,0.06,0.05,0.05,0.05,0.08,0.1,0.08,0.07,0.06,0.06,0.07,0.09,0.06,0.06,0.06,0.07,0.07,0.12,0.1,0.07,0.07,0.07,0.1,0.07],[0.05,0.05,0.07,0.06,0.06,0.04,0.06,0.05,0.05,0.06,0.08,0.08,0.07,0.05,0.06,0.07,0.08,0.08,0.06,0.07,0.06,0.07,0.07,0.09,0.08,0.06,0.07,0.06,0.06],[0.06,0.04,0.05,0.06,0.08,0.07,0.06,0.07,0.06,0.06,0.06,0.07,0.08,0.07,0.06,0.09,0.09,0.07,0.07,0.07,0.06,0.04,0.1,0.1,0.07,0.07,0.06,0.06,0.06],[0.07,0.04,0.04,0.07,0.07,0.06,0.06,0.06,0.06,0.06,0.05,0.07,0.09,0.08,0.06,0.07,0.08,0.09,0.06,0.07,0.06,0.07,0.07,0.1,0.09,0.06,0.05,0.05,0.06],[0.05,0.05,0.05,0.05,0.07,0.06,0.04,0.05,0.06,0.06,0.05,0.06,0.11,0.08,0.05,0.06,0.06,0.08,0.09,0.08,0.08,0.06,0.08,0.06,0.06,0.04,0.05,0.06,0.06],[0.05,0.07,0.05,0.06,0.06,0.07,0.05,0.06,0.06,0.05,0.06,0.08,0.09,0.08,0.07,0.06,0.06,0.07,0.09,0.1,0.08,0.08,0.07,0.08,0.07,0.06,0.06,0.05,0.04],[0.05,0.06,0.09,0.08,0.08,0.08,0.07,0.05,0.06,0.06,0.06,0.06,0.07,0.06,0.05,0.07,0.05,0.06,0.07,0.07,0.07,0.06,0.08,0.08,0.1,0.07,0.06,0.05,0.04],[0.05,0.07,0.07,0.05,0.07,0.06,0.05,0.06,0.06,0.05,0.06,0.06,0.06,0.05,0.05,0.06,0.05,0.06,0.06,0.06,0.06,0.05,0.06,0.07,0.09,0.08,0.07,0.06,0.05],[0.06,0.06,0.05,0.07,0.08,0.08,0.08,0.07,0.04,0.07,0.06,0.05,0.06,0.05,0.06,0.06,0.05,0.06,0.06,0.06,0.06,0.39,0.06,0.06,0.07,0.08,0.07,0.07,0.05],[0.08,0.08,0.08,0.09,0.09,0.11,0.1,0.07,0.08,0.06,0.06,0.06,0.05,0.07,0.06,0.05,0.06,0.07,0.07,0.37,0.42,0.46,0.43,0.36,0.06,0.07,0.07,0.06,0.11],[0.08,0.08,0.08,0.08,0.08,0.09,0.1,0.08,0.08,0.07,0.06,0.06,0.07,0.08,0.08,0.09,0.09,0.1,0.41,0.46,0.39,0.38,0.4,0.37,0.33,0.06,0.06,0.08,0.09],[0.09,0.08,0.09,0.07,0.08,0.07,0.08,0.09,0.07,0.07,0.08,0.07,0.07,0.11,0.11,0.09,0.09,0.1,0.08,0.41,0.4,0.4,0.38,0.39,0.07,0.07,0.08,0.09,0.1],[0.07,0.09,0.07,0.07,0.08,0.08,0.08,0.08,0.08,0.08,0.11,0.11,0.09,0.09,0.09,0.09,0.12,0.08,0.1,0.07,0.09,0.42,0.09,0.09,0.08,0.1,0.1,0.09,0.1],[0.08,0.1,0.11,0.09,0.08,0.08,0.09,0.07,0.08,0.09,0.11,0.1,0.09,0.09,0.09,0.12,0.09,0.13,0.1,0.1,0.09,0.09,0.08,0.09,0.09,0.1,0.11,0.09,0.1],[0.1,0.1,0.09,0.09,0.09,0.1,0.09,0.09,0.09,0.11,0.11,0.1,0.09,0.1,0.08,0.1,0.12,0.12,0.1,0.1,0.11,0.09,0.11,0.1,0.09,0.1,0.13,0.1,0.09],[0.1,0.1,0.1,0.09,0.09,0.1,0.1,0.1,0.1,0.11,0.12,0.11,0.1,0.08,0.1,0.1,0.13,0.1,0.12,0.1,0.1,0.1,0.1,0.1,0.09,0.09,0.1,0.1,0.1]]}}}}</script>
+
+<script>
+const DATA = JSON.parse(document.getElementById('oceanembed-data').textContent);
+const REGION_KEYS = Object.keys(DATA.regions);
+
+const state = {
+  page: 'landing',
+  region: REGION_KEYS[0],
+  dateIdx: 0,
+  depthKey: '0',
+  selectedProfileIdx: 0,
+  backendStatus: null,   // null=unchecked, 'ok'|'unreachable' once checked
+  liveOverview: null,    // populated by loadLiveOverview()
+};
+
+function region(){ return DATA.regions[state.region]; }
+
+function fmt(n, d=2){ return (n===null||n===undefined||Number.isNaN(n)) ? '—' : Number(n).toFixed(d); }
+
+function colorForValue(v, lo, hi){
+  const t = Math.max(0, Math.min(1, (v-lo)/(hi-lo || 1)));
+  const stops = [[8,61,92],[10,79,115],[79,195,247],[232,216,168],[226,102,91]];
+  const seg = t*(stops.length-1);
+  const i = Math.min(stops.length-2, Math.floor(seg));
+  const f = seg-i;
+  const c = stops[i].map((c0,k)=>Math.round(c0+f*(stops[i+1][k]-c0)));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+/* ---------------- NAV / SHELL ---------------- */
+const PAGES = [
+  ['overview','Overview'],['map','Ocean Map'],['profile','Digital Profile'],
+  ['events','Extreme Events'],['uncertainty','Uncertainty'],['argo','ARGO Guidance'],
+  ['cyclones','Cyclones'],
+  ['validation','Validation'],['xai','Explainable AI'],['about','About'],
+];
+
+function render(){
+  const app = document.getElementById('app');
+  if(state.page==='landing'){ app.innerHTML = landingHTML(); attachLandingEvents(); return; }
+
+  app.innerHTML = `
+    <div class="topbar">
+      <div class="demo-tag">● ${DATA.dataset_label}</div>
+      <div id="backendBadge" class="demo-tag mono" style="background:rgba(159,186,199,.12);color:var(--text-dim);">● checking backend…</div>
+      <div class="controls">
+        <select id="regionSel">${REGION_KEYS.map(k=>`<option value="${k}" ${k===state.region?'selected':''}>${DATA.regions[k].region_name}</option>`).join('')}</select>
+        <button class="ctl" id="reportBtn">⬇ Generate Report</button>
+        <button class="ctl" id="backHome">← Landing</button>
+      </div>
+    </div>
+    <div id="pageBody"></div>
+    <footer>OceanEmbed — SIH26066 · BWU TECH TITANS · ${DATA.dataset_label}</footer>
+  `;
+  document.getElementById('regionSel').onchange = e=>{ state.region=e.target.value; state.selectedProfileIdx=0; state.liveOverview=null; renderPage(); };
+  document.getElementById('backHome').onclick = ()=>{ state.page='landing'; render(); };
+  document.getElementById('reportBtn').onclick = onGenerateReport;
+  checkBackend();
+  renderNav();
+  renderPage();
+}
+
+async function checkBackend(){
+  const el = document.getElementById('backendBadge');
+  if(!el) return;
+  const res = await OceanEmbedAPI.health();
+  if(!res.ok){
+    state.backendStatus = 'unreachable';
+    el.style.color = 'var(--red)'; el.style.background = 'rgba(226,102,91,.12)';
+    el.textContent = '● backend unreachable — showing embedded demo data';
+    return;
+  }
+  state.backendStatus = 'ok';
+  const live = Object.entries(res.data.live_sources_configured||{}).filter(([,v])=>v).length;
+  const total = Object.keys(res.data.live_sources_configured||{}).length;
+  el.style.color = 'var(--green)'; el.style.background = 'rgba(91,201,138,.12)';
+  el.textContent = `● backend online — cache: ${res.data.cache_backend} — ${live}/${total} live sources configured`;
+}
+
+async function onGenerateReport(){
+  const btn = document.getElementById('reportBtn');
+  const prevLabel = btn.textContent;
+  btn.textContent = 'Generating…'; btn.disabled = true;
+  const res = await OceanEmbedAPI.generateReport(state.region);
+  btn.textContent = prevLabel; btn.disabled = false;
+  if(!res.ok){
+    alert(`Report generation needs the OceanEmbed backend running (${res.error}). Start it locally and try again.`);
+    return;
+  }
+  window.open(`${(window.OCEANEMBED_API_BASE||'http://localhost:8000/api')}/report/download?path=${encodeURIComponent(res.data.file_path)}`, '_blank');
+}
+
+function renderNav(){
+  let nav = document.querySelector('nav');
+  if(!nav){ nav = document.createElement('nav'); document.getElementById('app').prepend(nav); }
+  nav.innerHTML = PAGES.map(([k,label])=>`<button data-p="${k}" class="${state.page===k?'active':''}">${label}</button>`).join('');
+  nav.querySelectorAll('button').forEach(b=>b.onclick=()=>{ state.page=b.dataset.p; render(); });
+}
+
+function renderPage(){
+  const body = document.getElementById('pageBody');
+  const renderers = {overview:pageOverview, map:pageMap, profile:pageProfile, events:pageEvents,
+    uncertainty:pageUncertainty, argo:pageArgo, cyclones:pageCyclones, validation:pageValidation, xai:pageXai, about:pageAbout};
+  body.innerHTML = renderers[state.page]();
+  const post = {map:afterMap, profile:afterProfile, overview:afterOverview, cyclones:afterCyclones, validation:afterValidation, xai:afterXai}[state.page];
+  if(post) post();
+}
+
+/* ---------------- LANDING ---------------- */
+function landingHTML(){
+  return `
+  <div class="hero">
+    <canvas id="globe-canvas"></canvas>
+    <div class="hero-inner">
+    <div class="kicker mono">SIH26066 · DISASTER MANAGEMENT · TEAM BWU TECH TITANS</div>
+    <h1>OceanEmbed</h1>
+    <p class="lede">Reconstructing the hidden ocean beneath satellite-observed surfaces — a physics-informed,
+    uncertainty-aware deep learning platform for subsurface temperature intelligence.</p>
+    <button class="cta" id="launchBtn">Launch Dashboard →</button>
+    <div class="pillrow">
+      <div class="pill">Physics-informed AI</div><div class="pill">Uncertainty mapping</div>
+      <div class="pill">Smart ARGO guidance</div><div class="pill">Extreme-event detection</div>
+      <div class="pill">Digital Ocean Profile</div><div class="pill">Explainable AI</div>
+    </div>
+    <div class="flowstrip">
+      ${['Surface data','Ocean embedding','Physics-informed reconstruction','Uncertainty','ARGO/GLORYS validation','Decision intelligence']
+        .map((s,i)=>`<div class="flowstep"><b>${String(i+1).padStart(2,'0')}</b>${s}</div>`).join('')}
+    </div>
+    </div>
+  </div>
+  <div class="grid grid-3" style="margin-top:34px;">
+    <div class="card"><h3>The problem</h3><p style="font-size:13.5px;color:var(--text-dim);">ARGO floats give sparse point measurements below the surface; satellites see only the top of the ocean. The subsurface structure — where heat and disaster precursors actually live — stays mostly hidden.</p></div>
+    <div class="card"><h3>The approach</h3><p style="font-size:13.5px;color:var(--text-dim);">Learn the relationship between surface fields (SST, SSS, SSH, currents, winds) and subsurface temperature at 16 standard depths, constrained by ocean-physics-informed loss terms.</p></div>
+    <div class="card"><h3>Why it matters</h3><p style="font-size:13.5px;color:var(--text-dim);">Continuous subsurface awareness supports disaster management, maritime safety, marine-heatwave monitoring, fisheries, and climate research.</p></div>
+  </div>
+  <p class="hint" style="text-align:center;margin-top:18px;">Rotate the globe · click a marker to jump straight to that basin's dashboard.</p>`;
+}
+function attachLandingEvents(){
+  document.getElementById('launchBtn').onclick = ()=>{ state.page='overview'; render(); };
+  initOrResumeGlobe();
+}
+
+/* ---------------- OVERVIEW ---------------- */
+function pageOverview(){
+  const r = region();
+  const avgSst = r.map_layers.sst.flat().reduce((a,b)=>a+b,0) / r.map_layers.sst.flat().length;
+  const avgConf = r.profile_samples.flatMap(p=>p.confidence).filter(c=>c==='High').length / r.profile_samples.flatMap(p=>p.confidence).length;
+  return `
+  <h2 class="section-title">${r.region_name} — overview</h2>
+  <div id="liveOverviewStrip" class="mono" style="font-size:12px;color:var(--text-dim);margin-bottom:12px;"></div>
+  <div class="grid grid-3">
+    <div class="card"><h3>Average surface temperature</h3><div class="big" id="ov-sst">${fmt(avgSst,1)}°C</div><div class="sub" id="ov-sst-sub">grid mean, ${r.map_layers.date_used}</div></div>
+    <div class="card"><h3>Detected events</h3><div class="big">${r.events.length}</div><div class="sub">${r.events.filter(e=>e.severity==='High').length} high severity</div></div>
+    <div class="card"><h3>High-confidence coverage</h3><div class="big">${fmt(avgConf*100,0)}%</div><div class="sub">of sampled profile depths</div></div>
+    <div class="card"><h3>Model RMSE (held-out)</h3><div class="big">${fmt(r.metrics.model.rmse,2)}°C</div><div class="sub">baseline: ${fmt(r.metrics.baseline_climatology.rmse,2)}°C</div></div>
+    <div class="card"><h3>ARGO profiles available</h3><div class="big" id="ov-argo">${r.n_argo_profiles_total}</div><div class="sub" id="ov-argo-sub">synthetic demo coverage</div></div>
+    <div class="card"><h3>Grid coverage</h3><div class="big">${r.lats.length}×${r.lons.length}</div><div class="sub">lat × lon cells, ${DATA.depths_m.length} depth levels</div></div>
+  </div>
+  <p class="hint">This should answer four questions at a glance: <b>where</b> (map), <b>what</b> (temperature/anomaly/event), <b>how deep</b> (profile), <b>how reliable</b> (uncertainty).</p>
+  `;
+}
+
+async function afterOverview(){
+  const stripEl = document.getElementById('liveOverviewStrip');
+  if(!stripEl) return;
+  stripEl.textContent = 'checking live sources…';
+  const res = await OceanEmbedAPI.overview(state.region);
+  if(!res.ok){
+    stripEl.innerHTML = `${OceanEmbedAPI.statusBadgeHTML('error')} backend unreachable — figures above are the embedded demo dataset.`;
+    return;
+  }
+  state.liveOverview = res.data;
+  const cards = res.data.cards || {};
+  stripEl.innerHTML = `Live gateway reachable · ${Object.values(cards).filter(c=>c.status==='live').length} card(s) live this refresh.`;
+  const sst = cards.average_surface_temperature_c, argo = cards.active_argo_floats;
+  if(sst && sst.value != null){
+    document.getElementById('ov-sst').innerHTML = `${fmt(sst.value,1)}°C`;
+    document.getElementById('ov-sst-sub').innerHTML = `${OceanEmbedAPI.statusBadgeHTML(sst.status)} ${sst.source||''}`;
+  }
+  if(argo && argo.value != null){
+    document.getElementById('ov-argo').innerHTML = `${argo.value}`;
+    document.getElementById('ov-argo-sub').innerHTML = `${OceanEmbedAPI.statusBadgeHTML(argo.status)} ${argo.source||''}`;
+  }
+}
+
+/* ---------------- MAP ---------------- */
+function pageMap(){
+  const r = region();
+  const depthOptions = ['0', ...Object.keys(r.map_layers.temperature_by_depth)];
+  return `
+  <h2 class="section-title">Ocean Map — ${r.region_name}</h2>
+  <div class="grid grid-2">
+    <div class="card" id="mapWrap">
+      <div id="mapSvgHolder"></div>
+      <div class="legend"><span>Cold</span><div class="legend-bar"></div><span>Warm</span></div>
+      <div class="depth-row">
+        <span class="mono" style="font-size:12px;color:var(--text-dim);">Depth</span>
+        <input type="range" id="depthSlider" min="0" max="${depthOptions.length-1}" step="1" value="0">
+        <span class="mono" id="depthLabel" style="font-size:13px;min-width:52px;text-align:right;">0 m</span>
+      </div>
+      <p class="hint">Click a grid cell to open its Digital Ocean Profile. Demo bundle precomputes every 3rd depth level for size — production mode computes any (date, depth) on demand.</p>
+    </div>
+    <div class="card">
+      <h3>Selected date</h3>
+      <div style="margin:8px 0 16px;">
+        <select id="dateSel">${r.dates.map((d,i)=>`<option value="${i}" ${i===r.dates.length-1?'selected':''}>${d}</option>`).join('')}</select>
+      </div>
+      <h3>Bounding box</h3>
+      <table class="mono" style="font-size:12.5px;">
+        <tr><td>lat</td><td class="num">${r.bbox.lat_min}° – ${r.bbox.lat_max}°</td></tr>
+        <tr><td>lon</td><td class="num">${r.bbox.lon_min}° – ${r.bbox.lon_max}°</td></tr>
+      </table>
+      <h3 style="margin-top:16px;">Last clicked</h3>
+      <div id="clickInfo" class="mono" style="font-size:12.5px;color:var(--text-dim);">click the map to inspect a cell</div>
+    </div>
+  </div>`;
+}
+
+let mapDepthOptions = [];
+function afterMap(){
+  const r = region();
+  mapDepthOptions = ['0', ...Object.keys(r.map_layers.temperature_by_depth)];
+  drawMap();
+  document.getElementById('depthSlider').oninput = (e)=>{
+    state.depthKey = mapDepthOptions[+e.target.value];
+    document.getElementById('depthLabel').textContent = state.depthKey + ' m';
+    drawMap();
+  };
+}
+
+function drawMap(){
+  const r = region();
+  const grid = state.depthKey==='0' ? r.map_layers.sst : r.map_layers.temperature_by_depth[state.depthKey];
+  const flat = grid.flat();
+  const lo = Math.min(...flat), hi = Math.max(...flat);
+  const nRows = grid.length, nCols = grid[0].length;
+  const cell = 22;
+  const w = nCols*cell, h = nRows*cell;
+  let rects = '';
+  for(let i=0;i<nRows;i++){
+    for(let j=0;j<nCols;j++){
+      const v = grid[i][j];
+      rects += `<rect data-i="${i}" data-j="${j}" x="${j*cell}" y="${(nRows-1-i)*cell}" width="${cell-1}" height="${cell-1}"
+        fill="${colorForValue(v,lo,hi)}"><title>${fmt(v,1)}°C</title></rect>`;
+    }
+  }
+  const svg = `<svg id="mapSvg" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">${rects}</svg>`;
+  document.getElementById('mapSvgHolder').innerHTML = svg;
+  document.getElementById('mapSvg').querySelectorAll('rect').forEach(rect=>{
+    rect.style.cursor='pointer';
+    rect.onclick = ()=>{
+      const i = +rect.dataset.i, j = +rect.dataset.j;
+      const lat = r.lats[i], lon = r.lons[j];
+      document.getElementById('clickInfo').innerHTML = `lat ${fmt(lat,2)}, lon ${fmt(lon,2)}<br>value ${fmt(grid[i][j],1)}°C at ${state.depthKey}m`;
+      // jump to nearest precomputed profile sample
+      let bestIdx=0, bestD=Infinity;
+      r.profile_samples.forEach((s,idx)=>{ const d=(s.lat-lat)**2+(s.lon-lon)**2; if(d<bestD){bestD=d; bestIdx=idx;} });
+      state.selectedProfileIdx = bestIdx;
+      state.page='profile'; render();
+    };
+  });
+}
+
+/* ---------------- DIGITAL PROFILE ---------------- */
+function pageProfile(){
+  const r = region();
+  const opts = r.profile_samples.map((s,i)=>`<option value="${i}" ${i===state.selectedProfileIdx?'selected':''}>lat ${fmt(s.lat,2)}, lon ${fmt(s.lon,2)}</option>`).join('');
+  return `
+  <h2 class="section-title">Digital Ocean Profile — ${r.region_name}</h2>
+  <div class="grid grid-2">
+    <div class="card">
+      <div class="controls" style="margin-bottom:10px;"><select id="profSel">${opts}</select></div>
+      <canvas id="profileChart" height="360"></canvas>
+      <p class="hint">Shaded band = MC-Dropout uncertainty (±1σ). Dashed = GLORYS reference. Markers = synthetic-ARGO observation where available.</p>
+    </div>
+    <div class="card">
+      <h3>Thermocline</h3>
+      <div id="thermoBox" class="mono" style="font-size:13px;line-height:1.8;"></div>
+      <h3 style="margin-top:18px;">Ocean heat content (0–300m)</h3>
+      <div id="ohcBox" class="mono" style="font-size:13px;"></div>
+      <h3 style="margin-top:18px;">Confidence by depth</h3>
+      <div id="confList" style="font-size:12.5px;margin-top:8px;"></div>
+    </div>
+  </div>`;
+}
+
+let profileChartRef = null;
+function afterProfile(){
+  document.getElementById('profSel').onchange = e=>{ state.selectedProfileIdx = +e.target.value; renderPage(); };
+  drawProfile();
+}
+function drawProfile(){
+  const r = region();
+  const s = r.profile_samples[state.selectedProfileIdx];
+  const depths = DATA.depths_m;
+  const pred = s.predicted_temperature_c, unc = s.uncertainty_c;
+  const upper = pred.map((v,i)=>v+unc[i]), lower = pred.map((v,i)=>v-unc[i]);
+
+  const ctx = document.getElementById('profileChart').getContext('2d');
+  if(profileChartRef) profileChartRef.destroy();
+  const datasets = [
+    {label:'Uncertainty +1σ', data:upper, borderColor:'rgba(79,195,247,0.0)', backgroundColor:'rgba(79,195,247,0.16)', fill:'+1', pointRadius:0, tension:.3},
+    {label:'Uncertainty -1σ', data:lower, borderColor:'rgba(79,195,247,0.0)', backgroundColor:'rgba(79,195,247,0.16)', fill:false, pointRadius:0, tension:.3},
+    {label:'OceanEmbed prediction', data:pred, borderColor:'#4FC3F7', backgroundColor:'#4FC3F7', pointRadius:2, tension:.3, borderWidth:2},
+    {label:'GLORYS reference', data:s.glorys_reference_c, borderColor:'#E8D8A8', borderDash:[6,4], pointRadius:0, tension:.3, borderWidth:1.5},
+  ];
+  if(s.argo_observed_c){
+    datasets.push({label:`Synthetic ARGO (${s.argo_observed_date})`, data:s.argo_observed_c, borderColor:'#FFFFFF',
+      backgroundColor:'#FFFFFF', showLine:false, pointRadius:4, pointStyle:'rectRot'});
+  }
+  profileChartRef = new Chart(ctx, {
+    type:'line',
+    data:{ labels: depths, datasets },
+    options:{
+      indexAxis:'y',
+      scales:{
+        y:{reverse:true, title:{display:true,text:'Depth (m)',color:'#D6E8F2'}, ticks:{color:'#D6E8F2'}, grid:{color:'#1A5E7A'}},
+        x:{title:{display:true,text:'Temperature (°C)',color:'#D6E8F2'}, ticks:{color:'#D6E8F2'}, grid:{color:'#1A5E7A'}},
+      },
+      plugins:{legend:{labels:{color:'#FFFFFF', filter:(item)=> !item.text.startsWith('Uncertainty')}}},
+      maintainAspectRatio:false,
+    }
+  });
+
+  document.getElementById('thermoBox').innerHTML = `
+    depth &nbsp; ${fmt(s.thermocline.thermocline_depth_m,0)} m<br>
+    temp &nbsp;&nbsp; ${fmt(s.thermocline.thermocline_temperature_c,2)}°C<br>
+    gradient ${fmt(s.thermocline.max_gradient_c_per_m,3)} °C/m`;
+  document.getElementById('ohcBox').innerHTML = s.ocean_heat_content.heat_content_j_per_m2
+    ? `${(s.ocean_heat_content.heat_content_j_per_m2/1e9).toFixed(2)} GJ/m²`
+    : '—';
+  document.getElementById('confList').innerHTML = depths.map((d,i)=>{
+    const c = s.confidence[i];
+    return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--line);">
+      <span class="mono">${d}m</span><span class="badge ${c==='High'?'Low':(c==='Low'?'High':'Medium')}">${c}</span></div>`;
+  }).join('');
+}
+
+/* ---------------- EXTREME EVENTS ---------------- */
+function pageEvents(){
+  const r = region();
+  const events = [...r.events].sort((a,b)=> (b.severity==='High')-(a.severity==='High'));
+  return `
+  <h2 class="section-title">Extreme Events — ${r.region_name}</h2>
+  <p class="hint">Prototype threshold-based detection (std-dev anomaly + absolute-degree floor + mixed-layer collapse). See docs/extreme-events.md.</p>
+  ${events.length===0 ? '<p class="hint">No events flagged for this region/date range.</p>' : events.map(e=>`
+    <div class="list-item">
+      <div class="row1"><b>${e.type}</b><span class="badge ${e.severity}">${e.severity}</span></div>
+      <div class="reason">${e.date} · lat ${fmt(e.lat,2)}, lon ${fmt(e.lon,2)} · ${fmt(e.depth_m,0)}m</div>
+      <div class="reason">${e.reason}</div>
+    </div>`).join('')}
+  `;
+}
+
+/* ---------------- UNCERTAINTY ---------------- */
+function pageUncertainty(){
+  const r = region();
+  const grid = r.map_layers.uncertainty_surface_mean;
+  const flat = grid.flat();
+  const lo=Math.min(...flat), hi=Math.max(...flat);
+  const nRows=grid.length, nCols=grid[0].length, cell=22;
+  let rects='';
+  for(let i=0;i<nRows;i++) for(let j=0;j<nCols;j++){
+    rects += `<rect x="${j*cell}" y="${(nRows-1-i)*cell}" width="${cell-1}" height="${cell-1}" fill="${colorForValue(grid[i][j],lo,hi)}"><title>${fmt(grid[i][j],2)}°C</title></rect>`;
+  }
+  return `
+  <h2 class="section-title">Uncertainty — ${r.region_name}</h2>
+  <div class="grid grid-2">
+    <div class="card">
+      <svg id="mapSvg" viewBox="0 0 ${nCols*cell} ${nRows*cell}" xmlns="http://www.w3.org/2000/svg">${rects}</svg>
+      <div class="legend"><span>Low σ</span><div class="legend-bar"></div><span>High σ</span></div>
+    </div>
+    <div class="card">
+      <h3>Method</h3>
+      <p style="font-size:13px;color:var(--text-dim);">Monte-Carlo Dropout: ${20} stochastic forward passes per grid cell with dropout left active at inference; standard deviation across passes = epistemic uncertainty (mean over 16 depth levels shown here).</p>
+      <h3 style="margin-top:14px;">Confidence bands</h3>
+      <table><tr><th>Category</th><th>σ threshold</th></tr>
+        <tr><td><span class="badge Low">High</span></td><td class="num">≤ 0.35°C</td></tr>
+        <tr><td><span class="badge Medium">Medium</span></td><td class="num">0.35 – 0.80°C</td></tr>
+        <tr><td><span class="badge High">Low</span></td><td class="num">&gt; 0.80°C</td></tr>
+      </table>
+    </div>
+  </div>`;
+}
+
+/* ---------------- ARGO GUIDANCE ---------------- */
+function pageArgo(){
+  const r = region();
+  return `
+  <h2 class="section-title">Smart ARGO Guidance — ${r.region_name}</h2>
+  <p class="hint">priority_score = 0.5·uncertainty + 0.3·(1−observation density) + 0.2·anomaly, all min-max normalized. ${r.n_argo_profiles_total} existing synthetic Argo profiles considered.</p>
+  ${r.argo_guidance.map((g,idx)=>`
+    <div class="list-item">
+      <div class="row1"><b>Zone ${idx+1} · lat ${fmt(g.lat,2)}, lon ${fmt(g.lon,2)}</b><span class="mono" style="color:var(--teal);">${fmt(g.priority_score,2)}</span></div>
+      <div class="reason">${g.reason}</div>
+    </div>`).join('')}
+  `;
+}
+
+/* ---------------- CYCLONES (live NOAA NHC feed) ---------------- */
+function pageCyclones(){
+  return `
+  <h2 class="section-title">Cyclone Mode — Live Active Storms</h2>
+  <p class="hint">Live feed: NOAA National Hurricane Center (Atlantic / East Pacific coverage). Requires the OceanEmbed backend to be running.</p>
+  <div id="cycloneList"><div class="list-item">Loading live cyclone feed…</div></div>
+  `;
+}
+async function afterCyclones(){
+  const el = document.getElementById('cycloneList');
+  const res = await OceanEmbedAPI.cyclones();
+  if(!res.ok){
+    el.innerHTML = `<div class="list-item">${OceanEmbedAPI.statusBadgeHTML('error')} Backend unreachable (${res.error}). Start the OceanEmbed backend to see live storm tracks.</div>`;
+    return;
+  }
+  const storms = (res.data.data && res.data.data.storms) || [];
+  if(storms.length === 0){
+    el.innerHTML = `<div class="list-item">${OceanEmbedAPI.statusBadgeHTML(res.data.status)} No active storms reported right now by ${res.data.source}.</div>`;
+    return;
+  }
+  el.innerHTML = storms.map(s => `
+    <div class="list-item">
+      <div class="row1"><b>${s.name || 'Unnamed system'} — ${s.classification||''}</b>${OceanEmbedAPI.statusBadgeHTML(res.data.status)}</div>
+      <div class="reason">lat ${fmt(s.lat,2)}, lon ${fmt(s.lon,2)} · ${s.intensity_kt||'—'} kt · ${s.pressure_mb||'—'} mb · moving ${s.movement||'—'}</div>
+    </div>`).join('');
+}
+
+/* ---------------- VALIDATION ---------------- */
+function pageValidation(){
+  const r = region();
+  return `
+  <h2 class="section-title">Validation — ${r.region_name}</h2>
+  <div class="grid grid-3">
+    <div class="card"><h3>RMSE</h3><div class="big">${fmt(r.metrics.model.rmse,2)}°C</div><div class="sub">baseline ${fmt(r.metrics.baseline_climatology.rmse,2)}°C</div></div>
+    <div class="card"><h3>Bias</h3><div class="big">${fmt(r.metrics.model.bias,2)}°C</div><div class="sub">baseline ${fmt(r.metrics.baseline_climatology.bias,2)}°C</div></div>
+    <div class="card"><h3>Correlation</h3><div class="big">${fmt(r.metrics.model.correlation,3)}</div><div class="sub">baseline ${fmt(r.metrics.baseline_climatology.correlation,3)}</div></div>
+  </div>
+  <div class="grid grid-2" style="margin-top:16px;">
+    <div class="card"><h3>RMSE vs depth — model vs. climatology baseline</h3><canvas id="rmseChart" height="260"></canvas></div>
+    <div class="card">
+      <h3>Independent ARGO comparison</h3>
+      ${r.argo_validation ? `
+      <table><tr><td>n profiles</td><td class="num">${r.argo_validation.n_argo_profiles}</td></tr>
+      <tr><td>RMSE</td><td class="num">${fmt(r.argo_validation.rmse,2)}°C</td></tr>
+      <tr><td>Bias</td><td class="num">${fmt(r.argo_validation.bias,2)}°C</td></tr>
+      <tr><td>Correlation</td><td class="num">${fmt(r.argo_validation.correlation,3)}</td></tr></table>
+      ` : '<p class="hint">No Argo overlap available.</p>'}
+      <p class="hint">Model evaluated on a temporally held-out date never seen in training; ARGO comparison is fully independent of training.</p>
+    </div>
+  </div>`;
+}
+let rmseChartRef=null;
+function afterValidation(){
+  const r = region();
+  const ctx = document.getElementById('rmseChart').getContext('2d');
+  if(rmseChartRef) rmseChartRef.destroy();
+  rmseChartRef = new Chart(ctx, {
+    type:'line',
+    data:{ labels: r.depthwise_model.map(d=>d.depth_m),
+      datasets:[
+        {label:'OceanEmbed', data:r.depthwise_model.map(d=>d.rmse), borderColor:'#4FC3F7', backgroundColor:'#4FC3F7', tension:.3},
+        {label:'Climatology baseline', data:r.depthwise_baseline.map(d=>d.rmse), borderColor:'#E8D8A8', backgroundColor:'#E8D8A8', tension:.3, borderDash:[6,4]},
+      ]},
+    options:{ scales:{ x:{title:{display:true,text:'Depth (m)',color:'#D6E8F2'},ticks:{color:'#D6E8F2'},grid:{color:'#1A5E7A'}},
+      y:{title:{display:true,text:'RMSE (°C)',color:'#D6E8F2'},ticks:{color:'#D6E8F2'},grid:{color:'#1A5E7A'}}},
+      plugins:{legend:{labels:{color:'#FFFFFF'}}}, maintainAspectRatio:false }
+  });
+}
+
+/* ---------------- EXPLAINABLE AI ---------------- */
+function pageXai(){
+  const r = region();
+  return `
+  <h2 class="section-title">Explainable AI — ${r.region_name}</h2>
+  <p class="hint">Method: feature ablation — each surface variable replaced by its dataset mean; importance = mean absolute shift in the predicted profile, normalized to sum to 1.</p>
+  <div class="card"><div class="barlist" id="xaiBars"></div></div>
+  `;
+}
+function afterXai(){
+  const r = region();
+  const entries = Object.entries(r.explainability).sort((a,b)=>b[1]-a[1]);
+  const max = Math.max(...entries.map(e=>e[1]));
+  document.getElementById('xaiBars').innerHTML = entries.map(([k,v])=>`
+    <div class="barrow">
+      <span class="mono" style="color:var(--text-dim);">${k}</span>
+      <div class="bartrack"><div class="barfill" style="width:${(v/max*100).toFixed(1)}%"></div></div>
+      <span class="mono">${(v*100).toFixed(1)}%</span>
+    </div>`).join('');
+}
+
+/* ---------------- ABOUT ---------------- */
+function pageAbout(){
+  return `
+  <h2 class="section-title">About / Methodology</h2>
+  <div class="about-flow">
+    ${['Surface observations','Data harmonization','Ocean embedding','Depth reconstruction','Physics constraints','Uncertainty','Validation','Decision support']
+      .map(s=>`<span class="step">${s}</span>`).join('<span>→</span>')}
+  </div>
+  <div class="card" style="margin-top:16px;">
+    <h3>Scientific honesty notice</h3>
+    <p style="font-size:13.5px;color:var(--text-dim);line-height:1.6;">
+    This build ran in a sandboxed environment with no network access, so PyTorch, FastAPI, and real
+    Copernicus/GLORYS/Argo/satellite data could not be downloaded. The model here is a real, from-scratch
+    NumPy implementation trained with an actually-applied physics-informed loss, on a
+    <b>synthetic-but-physically-styled proxy dataset</b>, clearly labeled everywhere as
+    <code class="inline">${DATA.dataset_label}</code>. Every number in this dashboard was computed by
+    the pipeline in this repository — nothing is hand-typed. See <code class="inline">docs/</code> for
+    full methodology and honest limitations of each module.
+    </p>
+  </div>
+  <div class="card" style="margin-top:16px;">
+    <h3>Research references preserved from the SIH submission</h3>
+    <p style="font-size:13px;color:var(--text-dim);line-height:1.8;">
+      DORS (2022) · Convformer (2024) · Physics-guided reconstruction (2025) · TS-Cast (2026) ·
+      Deep-learning hydrographic profile retrieval (2020) · CNN-based vertical temperature profile
+      reconstruction (2025) · Dynamical-statistical interior T/S retrieval (2021)<br>
+      Reference datasets: GLORYS Global Ocean Reanalysis · ARGO Ocean Data Products
+    </p>
+  </div>`;
+}
+
+/* ---------------- LANDING GLOBE (re-themed from the Final-1 build to the
+   locked design-system palette: sky blue / sand instead of teal-glow/coral) ---------------- */
+const GLOBE_MARKERS = [
+  { key:'bay_of_bengal', label:'Bay of Bengal', lat:13, lon:90, active:true },
+  { key:'arabian_sea', label:'Arabian Sea', lat:15, lon:65, active:true },
+  { key:null, label:'Indian Ocean (broad)', lat:-25, lon:80, active:false },
+  { key:null, label:'Pacific Ocean', lat:0, lon:-160, active:false },
+  { key:null, label:'Atlantic Ocean', lat:10, lon:-40, active:false },
+  { key:null, label:'Southern Ocean', lat:-65, lon:20, active:false },
+  { key:null, label:'Mediterranean Sea', lat:35, lon:18, active:false },
+  { key:null, label:'South China Sea', lat:12, lon:115, active:false },
+  { key:null, label:'Gulf of Mexico', lat:25, lon:-90, active:false },
+  { key:null, label:'North Sea', lat:56, lon:3, active:false },
+];
+let globeState = null; // { renderer, scene, camera, group, markers, raf }
+
+function latLonToVec3(lat, lon, radius){
+  const phi = (90-lat) * Math.PI/180;
+  const theta = (lon+180) * Math.PI/180;
+  return new THREE.Vector3(
+    -radius * Math.sin(phi) * Math.cos(theta),
+    radius * Math.cos(phi),
+    radius * Math.sin(phi) * Math.sin(theta)
+  );
+}
+
+function initOrResumeGlobe(){
+  const canvas = document.getElementById('globe-canvas');
+  if(!canvas || typeof THREE === 'undefined') return;
+  if(globeState){ cancelAnimationFrame(globeState.raf); }
+
+  const w = canvas.clientWidth || 560, h = canvas.clientHeight || 560;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.setSize(w,h);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(42, w/h, 0.1, 100);
+  camera.position.set(0,0.2,3.2);
+
+  const group = new THREE.Group();
+  scene.add(group);
+
+  // Deep-ocean core, locked palette (#021B2D)
+  const core = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 48, 48),
+    new THREE.MeshPhongMaterial({ color:0x021B2D, shininess:14, specular:0x0A4F73 })
+  );
+  group.add(core);
+
+  // Ocean-panel wireframe graticule (#083D5C)
+  const wire = new THREE.Mesh(
+    new THREE.SphereGeometry(1.001, 24, 16),
+    new THREE.MeshBasicMaterial({ color:0x0A4F73, wireframe:true, transparent:true, opacity:0.3 })
+  );
+  group.add(wire);
+
+  // Sky-blue atmosphere glow (#4FC3F7)
+  const atmo = new THREE.Mesh(
+    new THREE.SphereGeometry(1.12, 48, 48),
+    new THREE.ShaderMaterial({
+      uniforms:{},
+      vertexShader:`varying vec3 vNormal; void main(){ vNormal = normalize(normalMatrix*normal); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+      fragmentShader:`varying vec3 vNormal; void main(){ float i = pow(0.62 - dot(vNormal, vec3(0,0,1.0)), 2.5); gl_FragColor = vec4(0.31,0.76,0.97,1.0) * i; }`,
+      blending: THREE.AdditiveBlending, side: THREE.BackSide, transparent:true
+    })
+  );
+  group.add(atmo);
+
+  scene.add(new THREE.AmbientLight(0x224455, 1.1));
+  const dl = new THREE.DirectionalLight(0x9fd8ee, 1.1);
+  dl.position.set(3,2,4);
+  scene.add(dl);
+
+  const markerMeshes = [];
+  GLOBE_MARKERS.forEach(m=>{
+    const pos = latLonToVec3(m.lat, m.lon, 1.015);
+    const geo = new THREE.SphereGeometry(m.active?0.024:0.014, 12, 12);
+    // active = sand (#E8D8A8), inactive = dim ocean-line color
+    const mat = new THREE.MeshBasicMaterial({ color: m.active ? 0xE8D8A8 : 0x1A5E7A, transparent:true, opacity:m.active?1:0.6 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.copy(pos);
+    mesh.userData = m;
+    group.add(mesh);
+    markerMeshes.push(mesh);
+
+    if(m.active){
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(0.032, 0.04, 24),
+        new THREE.MeshBasicMaterial({ color:0x4FC3F7, side:THREE.DoubleSide, transparent:true, opacity:0.75 })
+      );
+      ring.position.copy(pos);
+      ring.lookAt(pos.clone().multiplyScalar(2));
+      group.add(ring);
+    }
+  });
+
+  group.rotation.z = 0.41;
+  group.rotation.y = -1.1;
+
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+  let mouseX = 0, mouseY = 0;
+
+  function onPointerMove(e){
+    const r = canvas.getBoundingClientRect();
+    mouse.x = ((e.clientX - r.left)/r.width)*2 - 1;
+    mouse.y = -((e.clientY - r.top)/r.height)*2 + 1;
+    mouseX = mouse.x; mouseY = mouse.y;
+  }
+  function onClick(){
+    raycaster.setFromCamera(mouse, camera);
+    const hits = raycaster.intersectObjects(markerMeshes);
+    if(!hits.length) return;
+    const m = hits[0].object.userData;
+    if(m.active){
+      state.region = m.key; state.page = 'overview'; state.selectedProfileIdx = 0; state.liveOverview = null;
+      render();
+    } else {
+      alert(`${m.label}: no precomputed demo bundle yet for this basin. The live satellite gateway (backend/app/services/satellite/) works for any lat/lon globally — only the synthetic demo grid is scoped to Bay of Bengal & Arabian Sea today.`);
+    }
+  }
+  canvas.addEventListener('pointermove', onPointerMove);
+  canvas.addEventListener('click', onClick);
+
+  function animate(){
+    globeState.raf = requestAnimationFrame(animate);
+    group.rotation.y += 0.0016;
+    camera.position.x += (mouseX*0.35 - camera.position.x)*0.02;
+    camera.position.y += (0.2 + mouseY*0.2 - camera.position.y)*0.02;
+    camera.lookAt(0,0,0);
+    renderer.render(scene, camera);
+  }
+  globeState = { renderer, scene, camera, group, raf: 0 };
+  animate();
+}
+
+render();
+</script>
+</body>
+</html>

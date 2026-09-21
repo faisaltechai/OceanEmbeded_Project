@@ -1,0 +1,81 @@
+# OceanEmbed prototype configuration
+# All region/grid/model parameters are centralized here so the prototype
+# can later be pointed at real ARGO/GLORYS/satellite sources without code changes.
+
+regions:
+  bay_of_bengal:
+    name: "Bay of Bengal"
+    bbox: { lat_min: 5.0, lat_max: 22.0, lon_min: 80.0, lon_max: 100.0 }
+  arabian_sea:
+    name: "Arabian Sea"
+    bbox: { lat_min: 5.0, lat_max: 25.0, lon_min: 50.0, lon_max: 78.0 }
+
+grid:
+  # Real target resolution per the problem statement is 0.25 deg.
+  # DEMO MODE uses a coarser resolution so the whole pipeline runs in seconds
+  # on a laptop / this sandbox without any external data download.
+  production_resolution_deg: 0.25
+  demo_resolution_deg: 1.0
+
+depths_m: [0, 25, 50, 75, 100, 150, 200, 250, 300, 400, 500, 600, 700, 800, 900, 1000]
+# note: 16 levels incl. surface (0m) + 15 sub-surface levels, matching the
+# "15 standard levels, 0-1000m" requirement plus an explicit surface anchor.
+
+surface_variables: ["sst", "sss", "ssh", "u_current", "v_current", "u_wind", "v_wind"]
+# grouped into the 5 requirement categories as: SST, SSS, SSH/SLA, currents(u,v), winds(u,v)
+
+model:
+  embedding_dim: 32
+  hidden_dim: 64
+  learning_rate: 0.005
+  epochs: 300
+  batch_size: 256
+  seed: 42
+
+physics_loss:
+  lambda_physics: 0.15        # penalizes unrealistic vertical gradients (thermocline sanity)
+  lambda_smoothness: 0.10     # penalizes 2nd-derivative roughness of the vertical profile
+  lambda_surface_consistency: 0.20  # ties predicted 0m temperature to observed SST
+  lambda_regularization: 0.0001     # L2 weight decay
+
+uncertainty:
+  method: "mc_dropout"
+  dropout_rate: 0.15
+  n_forward_passes: 20
+
+events:
+  subsurface_heat_anomaly_std: 1.5   # flag if anomaly exceeds N std-dev of local climatology
+  rapid_change_threshold_c_per_day: 0.3
+
+demo:
+  n_dates: 6
+  start_date: "2026-01-10"
+  dataset_label: "DEMO / PROTOTYPE DATASET (synthetic, physically-styled — not live satellite data)"
+
+active_learning:
+  # All weights/thresholds below are documented PROTOTYPE parameters
+  # (ml/active_learning/, docs/active-learning.md) -- never claimed to be
+  # scientifically optimized. They extend, and do not replace, the
+  # ArgoGuidanceService weights above (`argo-guidance.md`).
+  event_std_threshold: 1.5   # same meaning as events.subsurface_heat_anomaly_std, kept independent so
+                             # this section can be retuned without touching event-detection behavior
+  acquisition_weights:       # must sum to 1; renormalized automatically if they don't
+    uncertainty: 0.35
+    anomaly: 0.20
+    thermocline_gradient: 0.20
+    event_risk: 0.15
+    observation_gap: 0.10
+  spatial_diversity:
+    min_distance_deg: 1.5    # candidates closer than this to an already-selected point are skipped
+    default_top_n: 20        # precomputed candidate POOL size (the API's `number_of_points` slices
+                              # into this without ever recomputing/retraining -- see backend/app/api/
+                              # active_learning.py); the frontend headline table shows the top 8 of it
+  frequency_thresholds:      # on mean-over-depth MC-Dropout uncertainty, degC -- same bands as
+                             # ml/inference/inference.py: confidence_category (High/Medium/Low)
+    low_max_c: 0.35
+    medium_max_c: 0.8
+    intervals_days: { normal: 10, increased: 5, intensive: 2, priority: 1 }
+  platform_rules:
+    deep_focus_m: 300.0             # uncertainty concentrated below this depth -> BGC-Argo
+    gradient_threshold_c_per_m: 0.05  # steeper than this -> Glider
+    event_risk_threshold: 0.7         # at/above this normalized event_risk -> AUV

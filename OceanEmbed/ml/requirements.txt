@@ -1,0 +1,13 @@
+# Demo mode (used in this sandbox) needs only:
+numpy>=1.26
+pandas>=2.2
+PyYAML>=6.0
+scikit-learn>=1.4
+
+# Production mode (real ARGO/GLORYS/satellite NetCDF ingestion) additionally needs:
+# torch>=2.2          # swap ml/models/model.py's NumPy net for a torch.nn.Module version
+# xarray>=2024.2
+# netCDF4>=1.6
+# dask>=2024.2
+# cartopy>=0.22
+# geopandas>=0.14

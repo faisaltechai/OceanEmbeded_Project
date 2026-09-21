@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OceanEmbed — Subsurface Ocean Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#021B2D; --panel:#083D5C; --panel-2:#0A4F73; --line:#1A5E7A;
+    --text:#FFFFFF; --text-dim:#D6E8F2; --teal:#4FC3F7; --teal-dim:#0A4F73;
+    --sand:#E8D8A8; --red:#E2665B; --green:#5BC98A; --blue:#4FC3F7;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font-family:'Space Grotesk',system-ui,sans-serif; -webkit-font-smoothing:antialiased;}
+  .mono{font-family:'IBM Plex Mono',ui-monospace,monospace;}
+  #app{max-width:1200px;margin:0 auto;padding:0 20px 60px;}
+
+  /* ---------- Landing ---------- */
+  .hero{padding:64px 0 40px;border-bottom:1px solid var(--line);}
+  .hero .kicker{color:var(--teal);font-size:13px;letter-spacing:.02em;margin-bottom:14px;}
+  .hero h1{font-size:clamp(36px,6vw,58px);line-height:1.02;margin:0 0 14px;font-weight:700;
+    background:linear-gradient(180deg,#ffffff,#BEE3F5);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .hero p.lede{font-size:19px;color:var(--text-dim);max-width:560px;line-height:1.5;margin:0 0 28px;}
+  .hero .cta{display:inline-flex;align-items:center;gap:10px;background:var(--teal);color:#04283D;
+    border:none;padding:13px 22px;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;
+    box-shadow:0 8px 24px rgba(79,195,247,.25);}
+  .hero .cta:hover{background:#6FD0FA;}
+  .pillrow{display:flex;gap:10px;flex-wrap:wrap;margin-top:34px;}
+  .pill{border:1px solid var(--line);color:var(--text-dim);border-radius:100px;padding:6px 14px;font-size:12.5px;}
+  .flowstrip{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:0;margin-top:46px;
+    border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;}
+  .flowstep{padding:16px 14px;border-right:1px solid var(--line);font-size:13px;color:var(--text-dim);}
+  .flowstep:last-child{border-right:none;}
+  .flowstep b{display:block;color:var(--text);font-size:14px;margin-bottom:3px;}
+
+  /* ---------- Nav ---------- */
+  nav{position:sticky;top:0;z-index:20;background:rgba(2,27,45,.92);backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--line);display:flex;gap:2px;overflow-x:auto;padding:0 20px;}
+  nav button{background:none;border:none;color:var(--text-dim);padding:14px 14px;font-size:13.5px;
+    cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;font-family:inherit;}
+  nav button.active{color:var(--text);border-bottom:2px solid var(--teal);}
+  nav button:hover{color:var(--text);}
+
+  /* ---------- Layout bits ---------- */
+  .topbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin:22px 0 18px;}
+  .demo-tag{display:inline-flex;align-items:center;gap:6px;background:rgba(232,216,168,.12);color:var(--sand);
+    border:1px solid rgba(232,216,168,.35);border-radius:6px;padding:4px 10px;font-size:11.5px;font-weight:500;}
+  .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  select,button.ctl{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:7px;
+    padding:8px 12px;font-size:13px;font-family:inherit;}
+  .grid{display:grid;gap:16px;}
+  .grid-2{grid-template-columns:2fr 1fr;}
+  .grid-3{grid-template-columns:repeat(3,1fr);}
+  @media(max-width:820px){.grid-2,.grid-3{grid-template-columns:1fr;}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;
+    box-shadow:0 6px 20px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.03);}
+  .card h3{margin:0 0 4px;font-size:14px;color:var(--text-dim);font-weight:500;}
+  .card .big{font-size:28px;font-weight:600;margin:4px 0;}
+  .card .sub{font-size:12px;color:var(--text-dim);}
+  h2.section-title{font-size:19px;margin:0 0 14px;font-weight:600;}
+  p.hint{color:var(--text-dim);font-size:13px;margin-top:6px;}
+
+  /* map */
+  #mapWrap{position:relative;}
+  #mapSvg{width:100%;height:auto;border-radius:8px;background:#01111D;cursor:crosshair;}
+  .legend{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--text-dim);}
+  .legend-bar{height:8px;flex:1;border-radius:4px;background:linear-gradient(90deg,#083D5C,#0A4F73,#4FC3F7,#E8D8A8,#E2665B);}
+  .depth-row{display:flex;align-items:center;gap:10px;margin-top:14px;}
+  input[type=range]{flex:1;accent-color:var(--teal);}
+
+  /* event / guidance list */
+  .list-item{border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:10px;
+    background:rgba(10,79,115,.25);box-shadow:0 3px 12px rgba(0,0,0,.18);}
+  .list-item .row1{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+  .badge{font-size:11px;padding:2px 8px;border-radius:100px;font-weight:600;}
+  .badge.High{background:rgba(226,102,91,.16);color:var(--red);}
+  .badge.Medium{background:rgba(232,216,168,.16);color:var(--sand);}
+  .badge.Low{background:rgba(91,201,138,.16);color:var(--green);}
+  .reason{color:var(--text-dim);font-size:12.5px;}
+
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);}
+  th{color:var(--text-dim);font-weight:500;font-size:12px;}
+  td.num{font-family:'IBM Plex Mono',monospace;}
+
+  .barlist{display:flex;flex-direction:column;gap:10px;}
+  .barrow{display:grid;grid-template-columns:80px 1fr 46px;align-items:center;gap:10px;font-size:12.5px;}
+  .bartrack{background:var(--panel-2);border-radius:4px;height:10px;overflow:hidden;}
+  .barfill{height:100%;background:linear-gradient(90deg,var(--teal-dim),var(--teal));}
+
+  footer{color:var(--text-dim);font-size:12px;text-align:center;padding:30px 0;border-top:1px solid var(--line);margin-top:40px;}
+  .about-flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;color:var(--text-dim);font-size:13px;margin:14px 0;}
+  .about-flow span.step{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:6px 10px;color:var(--text);}
+  code.inline{background:var(--panel-2);padding:1px 6px;border-radius:4px;font-size:12.5px;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script id="oceanembed-data" type="application/json">__OCEANEMBED_DATA__</script>
+
+<script>
+const DATA = JSON.parse(document.getElementById('oceanembed-data').textContent);
+const REGION_KEYS = Object.keys(DATA.regions);
+
+const state = {
+  page: 'landing',
+  region: REGION_KEYS[0],
+  dateIdx: 0,
+  depthKey: '0',
+  selectedProfileIdx: 0,
+};
+
+function region(){ return DATA.regions[state.region]; }
+
+function fmt(n, d=2){ return (n===null||n===undefined||Number.isNaN(n)) ? '—' : Number(n).toFixed(d); }
+
+function colorForValue(v, lo, hi){
+  const t = Math.max(0, Math.min(1, (v-lo)/(hi-lo || 1)));
+  const stops = [[8,61,92],[10,79,115],[79,195,247],[232,216,168],[226,102,91]];
+  const seg = t*(stops.length-1);
+  const i = Math.min(stops.length-2, Math.floor(seg));
+  const f = seg-i;
+  const c = stops[i].map((c0,k)=>Math.round(c0+f*(stops[i+1][k]-c0)));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+/* ---------------- NAV / SHELL ---------------- */
+const PAGES = [
+  ['overview','Overview'],['map','Ocean Map'],['profile','Digital Profile'],
+  ['events','Extreme Events'],['uncertainty','Uncertainty'],['argo','ARGO Guidance'],
+  ['validation','Validation'],['xai','Explainable AI'],['about','About'],
+];
+
+function render(){
+  const app = document.getElementById('app');
+  if(state.page==='landing'){ app.innerHTML = landingHTML(); attachLandingEvents(); return; }
+
+  app.innerHTML = `
+    <div class="topbar">
+      <div class="demo-tag">● ${DATA.dataset_label}</div>
+      <div class="controls">
+        <select id="regionSel">${REGION_KEYS.map(k=>`<option value="${k}" ${k===state.region?'selected':''}>${DATA.regions[k].region_name}</option>`).join('')}</select>
+        <button class="ctl" id="backHome">← Landing</button>
+      </div>
+    </div>
+    <div id="pageBody"></div>
+    <footer>OceanEmbed — SIH26066 · BWU TECH TITANS · ${DATA.dataset_label}</footer>
+  `;
+  document.getElementById('regionSel').onchange = e=>{ state.region=e.target.value; state.selectedProfileIdx=0; renderPage(); };
+  document.getElementById('backHome').onclick = ()=>{ state.page='landing'; render(); };
+  renderNav();
+  renderPage();
+}
+
+function renderNav(){
+  let nav = document.querySelector('nav');
+  if(!nav){ nav = document.createElement('nav'); document.getElementById('app').prepend(nav); }
+  nav.innerHTML = PAGES.map(([k,label])=>`<button data-p="${k}" class="${state.page===k?'active':''}">${label}</button>`).join('');
+  nav.querySelectorAll('button').forEach(b=>b.onclick=()=>{ state.page=b.dataset.p; render(); });
+}
+
+function renderPage(){
+  const body = document.getElementById('pageBody');
+  const renderers = {overview:pageOverview, map:pageMap, profile:pageProfile, events:pageEvents,
+    uncertainty:pageUncertainty, argo:pageArgo, validation:pageValidation, xai:pageXai, about:pageAbout};
+  body.innerHTML = renderers[state.page]();
+  const post = {map:afterMap, profile:afterProfile, validation:afterValidation, xai:afterXai}[state.page];
+  if(post) post();
+}
+
+/* ---------------- LANDING ---------------- */
+function landingHTML(){
+  return `
+  <div class="hero">
+    <div class="kicker mono">SIH26066 · DISASTER MANAGEMENT · TEAM BWU TECH TITANS</div>
+    <h1>OceanEmbed</h1>
+    <p class="lede">Reconstructing the hidden ocean beneath satellite-observed surfaces — a physics-informed,
+    uncertainty-aware deep learning platform for subsurface temperature intelligence.</p>
+    <button class="cta" id="launchBtn">Launch Dashboard →</button>
+    <div class="pillrow">
+      <div class="pill">Physics-informed AI</div><div class="pill">Uncertainty mapping</div>
+      <div class="pill">Smart ARGO guidance</div><div class="pill">Extreme-event detection</div>
+      <div class="pill">Digital Ocean Profile</div><div class="pill">Explainable AI</div>
+    </div>
+    <div class="flowstrip">
+      ${['Surface data','Ocean embedding','Physics-informed reconstruction','Uncertainty','ARGO/GLORYS validation','Decision intelligence']
+        .map((s,i)=>`<div class="flowstep"><b>${String(i+1).padStart(2,'0')}</b>${s}</div>`).join('')}
+    </div>
+  </div>
+  <div class="grid grid-3" style="margin-top:34px;">
+    <div class="card"><h3>The problem</h3><p style="font-size:13.5px;color:var(--text-dim);">ARGO floats give sparse point measurements below the surface; satellites see only the top of the ocean. The subsurface structure — where heat and disaster precursors actually live — stays mostly hidden.</p></div>
+    <div class="card"><h3>The approach</h3><p style="font-size:13.5px;color:var(--text-dim);">Learn the relationship between surface fields (SST, SSS, SSH, currents, winds) and subsurface temperature at 16 standard depths, constrained by ocean-physics-informed loss terms.</p></div>
+    <div class="card"><h3>Why it matters</h3><p style="font-size:13.5px;color:var(--text-dim);">Continuous subsurface awareness supports disaster management, maritime safety, marine-heatwave monitoring, fisheries, and climate research.</p></div>
+  </div>`;
+}
+function attachLandingEvents(){ document.getElementById('launchBtn').onclick = ()=>{ state.page='overview'; render(); }; }
+
+/* ---------------- OVERVIEW ---------------- */
+function pageOverview(){
+  const r = region();
+  const avgSst = r.map_layers.sst.flat().reduce((a,b)=>a+b,0) / r.map_layers.sst.flat().length;
+  const avgConf = r.profile_samples.flatMap(p=>p.confidence).filter(c=>c==='High').length / r.profile_samples.flatMap(p=>p.confidence).length;
+  return `
+  <h2 class="section-title">${r.region_name} — overview</h2>
+  <div class="grid grid-3">
+    <div class="card"><h3>Average surface temperature</h3><div class="big">${fmt(avgSst,1)}°C</div><div class="sub">grid mean, ${r.map_layers.date_used}</div></div>
+    <div class="card"><h3>Detected events</h3><div class="big">${r.events.length}</div><div class="sub">${r.events.filter(e=>e.severity==='High').length} high severity</div></div>
+    <div class="card"><h3>High-confidence coverage</h3><div class="big">${fmt(avgConf*100,0)}%</div><div class="sub">of sampled profile depths</div></div>
+    <div class="card"><h3>Model RMSE (held-out)</h3><div class="big">${fmt(r.metrics.model.rmse,2)}°C</div><div class="sub">baseline: ${fmt(r.metrics.baseline_climatology.rmse,2)}°C</div></div>
+    <div class="card"><h3>ARGO profiles available</h3><div class="big">${r.n_argo_profiles_total}</div><div class="sub">synthetic demo coverage</div></div>
+    <div class="card"><h3>Grid coverage</h3><div class="big">${r.lats.length}×${r.lons.length}</div><div class="sub">lat × lon cells, ${DATA.depths_m.length} depth levels</div></div>
+  </div>
+  <p class="hint">This should answer four questions at a glance: <b>where</b> (map), <b>what</b> (temperature/anomaly/event), <b>how deep</b> (profile), <b>how reliable</b> (uncertainty).</p>
+  `;
+}
+
+/* ---------------- MAP ---------------- */
+function pageMap(){
+  const r = region();
+  const depthOptions = ['0', ...Object.keys(r.map_layers.temperature_by_depth)];
+  return `
+  <h2 class="section-title">Ocean Map — ${r.region_name}</h2>
+  <div class="grid grid-2">
+    <div class="card" id="mapWrap">
+      <div id="mapSvgHolder"></div>
+      <div class="legend"><span>Cold</span><div class="legend-bar"></div><span>Warm</span></div>
+      <div class="depth-row">
+        <span class="mono" style="font-size:12px;color:var(--text-dim);">Depth</span>
+        <input type="range" id="depthSlider" min="0" max="${depthOptions.length-1}" step="1" value="0">
+        <span class="mono" id="depthLabel" style="font-size:13px;min-width:52px;text-align:right;">0 m</span>
+      </div>
+      <p class="hint">Click a grid cell to open its Digital Ocean Profile. Demo bundle precomputes every 3rd depth level for size — production mode computes any (date, depth) on demand.</p>
+    </div>
+    <div class="card">
+      <h3>Selected date</h3>
+      <div style="margin:8px 0 16px;">
+        <select id="dateSel">${r.dates.map((d,i)=>`<option value="${i}" ${i===r.dates.length-1?'selected':''}>${d}</option>`).join('')}</select>
+      </div>
+      <h3>Bounding box</h3>
+      <table class="mono" style="font-size:12.5px;">
+        <tr><td>lat</td><td class="num">${r.bbox.lat_min}° – ${r.bbox.lat_max}°</td></tr>
+        <tr><td>lon</td><td class="num">${r.bbox.lon_min}° – ${r.bbox.lon_max}°</td></tr>
+      </table>
+      <h3 style="margin-top:16px;">Last clicked</h3>
+      <div id="clickInfo" class="mono" style="font-size:12.5px;color:var(--text-dim);">click the map to inspect a cell</div>
+    </div>
+  </div>`;
+}
+
+let mapDepthOptions = [];
+function afterMap(){
+  const r = region();
+  mapDepthOptions = ['0', ...Object.keys(r.map_layers.temperature_by_depth)];
+  drawMap();
+  document.getElementById('depthSlider').oninput = (e)=>{
+    state.depthKey = mapDepthOptions[+e.target.value];
+    document.getElementById('depthLabel').textContent = state.depthKey + ' m';
+    drawMap();
+  };
+}
+
+function drawMap(){
+  const r = region();
+  const grid = state.depthKey==='0' ? r.map_layers.sst : r.map_layers.temperature_by_depth[state.depthKey];
+  const flat = grid.flat();
+  const lo = Math.min(...flat), hi = Math.max(...flat);
+  const nRows = grid.length, nCols = grid[0].length;
+  const cell = 22;
+  const w = nCols*cell, h = nRows*cell;
+  let rects = '';
+  for(let i=0;i<nRows;i++){
+    for(let j=0;j<nCols;j++){
+      const v = grid[i][j];
+      rects += `<rect data-i="${i}" data-j="${j}" x="${j*cell}" y="${(nRows-1-i)*cell}" width="${cell-1}" height="${cell-1}"
+        fill="${colorForValue(v,lo,hi)}"><title>${fmt(v,1)}°C</title></rect>`;
+    }
+  }
+  const svg = `<svg id="mapSvg" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">${rects}</svg>`;
+  document.getElementById('mapSvgHolder').innerHTML = svg;
+  document.getElementById('mapSvg').querySelectorAll('rect').forEach(rect=>{
+    rect.style.cursor='pointer';
+    rect.onclick = ()=>{
+      const i = +rect.dataset.i, j = +rect.dataset.j;
+      const lat = r.lats[i], lon = r.lons[j];
+      document.getElementById('clickInfo').innerHTML = `lat ${fmt(lat,2)}, lon ${fmt(lon,2)}<br>value ${fmt(grid[i][j],1)}°C at ${state.depthKey}m`;
+      // jump to nearest precomputed profile sample
+      let bestIdx=0, bestD=Infinity;
+      r.profile_samples.forEach((s,idx)=>{ const d=(s.lat-lat)**2+(s.lon-lon)**2; if(d<bestD){bestD=d; bestIdx=idx;} });
+      state.selectedProfileIdx = bestIdx;
+      state.page='profile'; render();
+    };
+  });
+}
+
+/* ---------------- DIGITAL PROFILE ---------------- */
+function pageProfile(){
+  const r = region();
+  const opts = r.profile_samples.map((s,i)=>`<option value="${i}" ${i===state.selectedProfileIdx?'selected':''}>lat ${fmt(s.lat,2)}, lon ${fmt(s.lon,2)}</option>`).join('');
+  return `
+  <h2 class="section-title">Digital Ocean Profile — ${r.region_name}</h2>
+  <div class="grid grid-2">
+    <div class="card">
+      <div class="controls" style="margin-bottom:10px;"><select id="profSel">${opts}</select></div>
+      <canvas id="profileChart" height="360"></canvas>
+      <p class="hint">Shaded band = MC-Dropout uncertainty (±1σ). Dashed = GLORYS reference. Markers = synthetic-ARGO observation where available.</p>
+    </div>
+    <div class="card">
+      <h3>Thermocline</h3>
+      <div id="thermoBox" class="mono" style="font-size:13px;line-height:1.8;"></div>
+      <h3 style="margin-top:18px;">Ocean heat content (0–300m)</h3>
+      <div id="ohcBox" class="mono" style="font-size:13px;"></div>
+      <h3 style="margin-top:18px;">Confidence by depth</h3>
+      <div id="confList" style="font-size:12.5px;margin-top:8px;"></div>
+    </div>
+  </div>`;
+}
+
+let profileChartRef = null;
+function afterProfile(){
+  document.getElementById('profSel').onchange = e=>{ state.selectedProfileIdx = +e.target.value; renderPage(); };
+  drawProfile();
+}
+function drawProfile(){
+  const r = region();
+  const s = r.profile_samples[state.selectedProfileIdx];
+  const depths = DATA.depths_m;
+  const pred = s.predicted_temperature_c, unc = s.uncertainty_c;
+  const upper = pred.map((v,i)=>v+unc[i]), lower = pred.map((v,i)=>v-unc[i]);
+
+  const ctx = document.getElementById('profileChart').getContext('2d');
+  if(profileChartRef) profileChartRef.destroy();
+  const datasets = [
+    {label:'Uncertainty +1σ', data:upper, borderColor:'rgba(79,195,247,0.0)', backgroundColor:'rgba(79,195,247,0.16)', fill:'+1', pointRadius:0, tension:.3},
+    {label:'Uncertainty -1σ', data:lower, borderColor:'rgba(79,195,247,0.0)', backgroundColor:'rgba(79,195,247,0.16)', fill:false, pointRadius:0, tension:.3},
+    {label:'OceanEmbed prediction', data:pred, borderColor:'#4FC3F7', backgroundColor:'#4FC3F7', pointRadius:2, tension:.3, borderWidth:2},
+    {label:'GLORYS reference', data:s.glorys_reference_c, borderColor:'#E8D8A8', borderDash:[6,4], pointRadius:0, tension:.3, borderWidth:1.5},
+  ];
+  if(s.argo_observed_c){
+    datasets.push({label:`Synthetic ARGO (${s.argo_observed_date})`, data:s.argo_observed_c, borderColor:'#FFFFFF',
+      backgroundColor:'#FFFFFF', showLine:false, pointRadius:4, pointStyle:'rectRot'});
+  }
+  profileChartRef = new Chart(ctx, {
+    type:'line',
+    data:{ labels: depths, datasets },
+    options:{
+      indexAxis:'y',
+      scales:{
+        y:{reverse:true, title:{display:true,text:'Depth (m)',color:'#D6E8F2'}, ticks:{color:'#D6E8F2'}, grid:{color:'#1A5E7A'}},
+        x:{title:{display:true,text:'Temperature (°C)',color:'#D6E8F2'}, ticks:{color:'#D6E8F2'}, grid:{color:'#1A5E7A'}},
+      },
+      plugins:{legend:{labels:{color:'#FFFFFF', filter:(item)=> !item.text.startsWith('Uncertainty')}}},
+      maintainAspectRatio:false,
+    }
+  });
+
+  document.getElementById('thermoBox').innerHTML = `
+    depth &nbsp; ${fmt(s.thermocline.thermocline_depth_m,0)} m<br>
+    temp &nbsp;&nbsp; ${fmt(s.thermocline.thermocline_temperature_c,2)}°C<br>
+    gradient ${fmt(s.thermocline.max_gradient_c_per_m,3)} °C/m`;
+  document.getElementById('ohcBox').innerHTML = s.ocean_heat_content.heat_content_j_per_m2
+    ? `${(s.ocean_heat_content.heat_content_j_per_m2/1e9).toFixed(2)} GJ/m²`
+    : '—';
+  document.getElementById('confList').innerHTML = depths.map((d,i)=>{
+    const c = s.confidence[i];
+    return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--line);">
+      <span class="mono">${d}m</span><span class="badge ${c==='High'?'Low':(c==='Low'?'High':'Medium')}">${c}</span></div>`;
+  }).join('');
+}
+
+/* ---------------- EXTREME EVENTS ---------------- */
+function pageEvents(){
+  const r = region();
+  const events = [...r.events].sort((a,b)=> (b.severity==='High')-(a.severity==='High'));
+  return `
+  <h2 class="section-title">Extreme Events — ${r.region_name}</h2>
+  <p class="hint">Prototype threshold-based detection (std-dev anomaly + absolute-degree floor + mixed-layer collapse). See docs/extreme-events.md.</p>
+  ${events.length===0 ? '<p class="hint">No events flagged for this region/date range.</p>' : events.map(e=>`
+    <div class="list-item">
+      <div class="row1"><b>${e.type}</b><span class="badge ${e.severity}">${e.severity}</span></div>
+      <div class="reason">${e.date} · lat ${fmt(e.lat,2)}, lon ${fmt(e.lon,2)} · ${fmt(e.depth_m,0)}m</div>
+      <div class="reason">${e.reason}</div>
+    </div>`).join('')}
+  `;
+}
+
+/* ---------------- UNCERTAINTY ---------------- */
+function pageUncertainty(){
+  const r = region();
+  const grid = r.map_layers.uncertainty_surface_mean;
+  const flat = grid.flat();
+  const lo=Math.min(...flat), hi=Math.max(...flat);
+  const nRows=grid.length, nCols=grid[0].length, cell=22;
+  let rects='';
+  for(let i=0;i<nRows;i++) for(let j=0;j<nCols;j++){
+    rects += `<rect x="${j*cell}" y="${(nRows-1-i)*cell}" width="${cell-1}" height="${cell-1}" fill="${colorForValue(grid[i][j],lo,hi)}"><title>${fmt(grid[i][j],2)}°C</title></rect>`;
+  }
+  return `
+  <h2 class="section-title">Uncertainty — ${r.region_name}</h2>
+  <div class="grid grid-2">
+    <div class="card">
+      <svg id="mapSvg" viewBox="0 0 ${nCols*cell} ${nRows*cell}" xmlns="http://www.w3.org/2000/svg">${rects}</svg>
+      <div class="legend"><span>Low σ</span><div class="legend-bar"></div><span>High σ</span></div>
+    </div>
+    <div class="card">
+      <h3>Method</h3>
+      <p style="font-size:13px;color:var(--text-dim);">Monte-Carlo Dropout: ${20} stochastic forward passes per grid cell with dropout left active at inference; standard deviation across passes = epistemic uncertainty (mean over 16 depth levels shown here).</p>
+      <h3 style="margin-top:14px;">Confidence bands</h3>
+      <table><tr><th>Category</th><th>σ threshold</th></tr>
+        <tr><td><span class="badge Low">High</span></td><td class="num">≤ 0.35°C</td></tr>
+        <tr><td><span class="badge Medium">Medium</span></td><td class="num">0.35 – 0.80°C</td></tr>
+        <tr><td><span class="badge High">Low</span></td><td class="num">&gt; 0.80°C</td></tr>
+      </table>
+    </div>
+  </div>`;
+}
+
+/* ---------------- ARGO GUIDANCE ---------------- */
+function pageArgo(){
+  const r = region();
+  return `
+  <h2 class="section-title">Smart ARGO Guidance — ${r.region_name}</h2>
+  <p class="hint">priority_score = 0.5·uncertainty + 0.3·(1−observation density) + 0.2·anomaly, all min-max normalized. ${r.n_argo_profiles_total} existing synthetic Argo profiles considered.</p>
+  ${r.argo_guidance.map((g,idx)=>`
+    <div class="list-item">
+      <div class="row1"><b>Zone ${idx+1} · lat ${fmt(g.lat,2)}, lon ${fmt(g.lon,2)}</b><span class="mono" style="color:var(--teal);">${fmt(g.priority_score,2)}</span></div>
+      <div class="reason">${g.reason}</div>
+    </div>`).join('')}
+  `;
+}
+
+/* ---------------- VALIDATION ---------------- */
+function pageValidation(){
+  const r = region();
+  return `
+  <h2 class="section-title">Validation — ${r.region_name}</h2>
+  <div class="grid grid-3">
+    <div class="card"><h3>RMSE</h3><div class="big">${fmt(r.metrics.model.rmse,2)}°C</div><div class="sub">baseline ${fmt(r.metrics.baseline_climatology.rmse,2)}°C</div></div>
+    <div class="card"><h3>Bias</h3><div class="big">${fmt(r.metrics.model.bias,2)}°C</div><div class="sub">baseline ${fmt(r.metrics.baseline_climatology.bias,2)}°C</div></div>
+    <div class="card"><h3>Correlation</h3><div class="big">${fmt(r.metrics.model.correlation,3)}</div><div class="sub">baseline ${fmt(r.metrics.baseline_climatology.correlation,3)}</div></div>
+  </div>
+  <div class="grid grid-2" style="margin-top:16px;">
+    <div class="card"><h3>RMSE vs depth — model vs. climatology baseline</h3><canvas id="rmseChart" height="260"></canvas></div>
+    <div class="card">
+      <h3>Independent ARGO comparison</h3>
+      ${r.argo_validation ? `
+      <table><tr><td>n profiles</td><td class="num">${r.argo_validation.n_argo_profiles}</td></tr>
+      <tr><td>RMSE</td><td class="num">${fmt(r.argo_validation.rmse,2)}°C</td></tr>
+      <tr><td>Bias</td><td class="num">${fmt(r.argo_validation.bias,2)}°C</td></tr>
+      <tr><td>Correlation</td><td class="num">${fmt(r.argo_validation.correlation,3)}</td></tr></table>
+      ` : '<p class="hint">No Argo overlap available.</p>'}
+      <p class="hint">Model evaluated on a temporally held-out date never seen in training; ARGO comparison is fully independent of training.</p>
+    </div>
+  </div>`;
+}
+let rmseChartRef=null;
+function afterValidation(){
+  const r = region();
+  const ctx = document.getElementById('rmseChart').getContext('2d');
+  if(rmseChartRef) rmseChartRef.destroy();
+  rmseChartRef = new Chart(ctx, {
+    type:'line',
+    data:{ labels: r.depthwise_model.map(d=>d.depth_m),
+      datasets:[
+        {label:'OceanEmbed', data:r.depthwise_model.map(d=>d.rmse), borderColor:'#4FC3F7', backgroundColor:'#4FC3F7', tension:.3},
+        {label:'Climatology baseline', data:r.depthwise_baseline.map(d=>d.rmse), borderColor:'#E8D8A8', backgroundColor:'#E8D8A8', tension:.3, borderDash:[6,4]},
+      ]},
+    options:{ scales:{ x:{title:{display:true,text:'Depth (m)',color:'#D6E8F2'},ticks:{color:'#D6E8F2'},grid:{color:'#1A5E7A'}},
+      y:{title:{display:true,text:'RMSE (°C)',color:'#D6E8F2'},ticks:{color:'#D6E8F2'},grid:{color:'#1A5E7A'}}},
+      plugins:{legend:{labels:{color:'#FFFFFF'}}}, maintainAspectRatio:false }
+  });
+}
+
+/* ---------------- EXPLAINABLE AI ---------------- */
+function pageXai(){
+  const r = region();
+  return `
+  <h2 class="section-title">Explainable AI — ${r.region_name}</h2>
+  <p class="hint">Method: feature ablation — each surface variable replaced by its dataset mean; importance = mean absolute shift in the predicted profile, normalized to sum to 1.</p>
+  <div class="card"><div class="barlist" id="xaiBars"></div></div>
+  `;
+}
+function afterXai(){
+  const r = region();
+  const entries = Object.entries(r.explainability).sort((a,b)=>b[1]-a[1]);
+  const max = Math.max(...entries.map(e=>e[1]));
+  document.getElementById('xaiBars').innerHTML = entries.map(([k,v])=>`
+    <div class="barrow">
+      <span class="mono" style="color:var(--text-dim);">${k}</span>
+      <div class="bartrack"><div class="barfill" style="width:${(v/max*100).toFixed(1)}%"></div></div>
+      <span class="mono">${(v*100).toFixed(1)}%</span>
+    </div>`).join('');
+}
+
+/* ---------------- ABOUT ---------------- */
+function pageAbout(){
+  return `
+  <h2 class="section-title">About / Methodology</h2>
+  <div class="about-flow">
+    ${['Surface observations','Data harmonization','Ocean embedding','Depth reconstruction','Physics constraints','Uncertainty','Validation','Decision support']
+      .map(s=>`<span class="step">${s}</span>`).join('<span>→</span>')}
+  </div>
+  <div class="card" style="margin-top:16px;">
+    <h3>Scientific honesty notice</h3>
+    <p style="font-size:13.5px;color:var(--text-dim);line-height:1.6;">
+    This build ran in a sandboxed environment with no network access, so PyTorch, FastAPI, and real
+    Copernicus/GLORYS/Argo/satellite data could not be downloaded. The model here is a real, from-scratch
+    NumPy implementation trained with an actually-applied physics-informed loss, on a
+    <b>synthetic-but-physically-styled proxy dataset</b>, clearly labeled everywhere as
+    <code class="inline">${DATA.dataset_label}</code>. Every number in this dashboard was computed by
+    the pipeline in this repository — nothing is hand-typed. See <code class="inline">docs/</code> for
+    full methodology and honest limitations of each module.
+    </p>
+  </div>
+  <div class="card" style="margin-top:16px;">
+    <h3>Research references preserved from the SIH submission</h3>
+    <p style="font-size:13px;color:var(--text-dim);line-height:1.8;">
+      DORS (2022) · Convformer (2024) · Physics-guided reconstruction (2025) · TS-Cast (2026) ·
+      Deep-learning hydrographic profile retrieval (2020) · CNN-based vertical temperature profile
+      reconstruction (2025) · Dynamical-statistical interior T/S retrieval (2021)<br>
+      Reference datasets: GLORYS Global Ocean Reanalysis · ARGO Ocean Data Products
+    </p>
+  </div>`;
+}
+
+render();
+</script>
+</body>
+</html>

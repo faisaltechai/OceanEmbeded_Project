@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>OceanEmbed — Subsurface Ocean Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="assets/oceanembed-client.js"></script>
+<style>
+:root{
+  --abyss:#010C16;
+  --deep:#021B2D;
+  --ocean:#0C3A54;
+  --ocean-2:#124A69;
+  --sky:#6FCBEA;
+  --glow:#33E6C4;
+  --sand:#E8C9A0;
+  --coral:#FF7A64;
+  --ink:#EAF4F7;
+  --ink-dim:#9FBAC7;
+  --line:rgba(159,186,199,0.16);
+  --glass:rgba(18,63,88,0.38);
+  --glass-strong:rgba(10,40,58,0.62);
+  --radius:14px;
+}
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  margin:0;
+  background:
+    radial-gradient(ellipse at 20% -10%, #0A3A52 0%, transparent 55%),
+    radial-gradient(ellipse at 90% 10%, #062338 0%, transparent 50%),
+    var(--abyss);
+  color:var(--ink);
+  font-family:'Space Grotesk', sans-serif;
+  overflow-x:hidden;
+}
+.mono{font-family:'IBM Plex Mono', monospace;}
+a{color:inherit;}
+::selection{background:var(--glow); color:var(--abyss);}
+
+/* ---------- layout helpers ---------- */
+.wrap{max-width:1180px; margin:0 auto; padding:0 24px;}
+.section{padding:88px 0;}
+.section-head{margin-bottom:36px; max-width:640px;}
+.eyebrow{font-family:'IBM Plex Mono',monospace; font-size:12.5px; letter-spacing:0.02em; color:var(--glow); margin:0 0 10px;}
+.section-head h2{font-size:clamp(24px,3.4vw,34px); margin:0 0 12px; font-weight:600; line-height:1.2;}
+.section-head p{color:var(--ink-dim); font-size:15px; line-height:1.6; margin:0;}
+
+/* ---------- nav ---------- */
+nav{
+  position:fixed; top:0; left:0; right:0; z-index:50;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:16px 28px;
+  background:rgba(1,12,22,0.55);
+  backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);
+}
+.brand{display:flex; align-items:center; gap:10px; font-weight:600; font-size:17px; letter-spacing:0.01em;}
+.brand-dot{width:9px; height:9px; border-radius:50%; background:var(--glow); box-shadow:0 0 10px 2px var(--glow);}
+.nav-links{display:flex; gap:26px; font-size:13.5px; color:var(--ink-dim);}
+.nav-links a{text-decoration:none; transition:color .2s;}
+.nav-links a:hover{color:var(--ink);}
+.dataset-badge{
+  font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--sand);
+  border:1px solid rgba(232,201,160,0.35); border-radius:20px;
+  padding:5px 11px; white-space:nowrap;
+}
+@media (max-width:760px){ .nav-links{display:none;} }
+
+/* ---------- hero / globe ---------- */
+.hero{
+  position:relative; min-height:100vh; display:flex; align-items:center;
+  padding-top:70px;
+}
+#globe-canvas{position:absolute; inset:0; width:100%; height:100%; display:block;}
+.hero-inner{position:relative; z-index:2; width:100%;}
+.hero-grid{display:grid; grid-template-columns:1fr; gap:20px;}
+.kicker{font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--glow); letter-spacing:0.03em; margin:0 0 16px;}
+.hero h1{font-size:clamp(32px,6vw,58px); line-height:1.06; margin:0 0 20px; font-weight:600; max-width:620px;}
+.hero h1 .accent{color:var(--sky);}
+.hero p.lede{font-size:16px; color:var(--ink-dim); max-width:480px; line-height:1.65; margin:0 0 30px;}
+.hero-cta{display:flex; gap:14px; flex-wrap:wrap; margin-bottom:46px;}
+.btn{
+  font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:14px;
+  padding:13px 22px; border-radius:10px; border:1px solid transparent; cursor:pointer;
+  transition:transform .15s ease, box-shadow .15s ease;
+}
+.btn-primary{background:var(--glow); color:#012018; box-shadow:0 0 0 rgba(51,230,196,0);}
+.btn-primary:hover{transform:translateY(-1px); box-shadow:0 6px 24px -6px rgba(51,230,196,0.55);}
+.btn-ghost{background:transparent; border:1px solid var(--line); color:var(--ink);}
+.btn-ghost:hover{border-color:var(--sky); color:var(--sky);}
+.hero-hint{font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink-dim); display:flex; align-items:center; gap:8px;}
+.pulse-dot{width:7px; height:7px; border-radius:50%; background:var(--sky); animation:pulse 1.8s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:0.35; transform:scale(0.85);} 50%{opacity:1; transform:scale(1.15);}}
+
+.toast{
+  position:fixed; left:50%; bottom:28px; transform:translate(-50%,140%);
+  background:var(--glass-strong); border:1px solid var(--line); backdrop-filter:blur(10px);
+  padding:13px 20px; border-radius:11px; font-size:13.5px; max-width:min(90vw,420px);
+  transition:transform .35s cubic-bezier(.2,.9,.25,1); z-index:80; color:var(--ink);
+}
+.toast.show{transform:translate(-50%,0);}
+
+/* ---------- glass card system ---------- */
+.card{
+  background:var(--glass); border:1px solid var(--line); border-radius:var(--radius);
+  backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  padding:22px;
+}
+.grid{display:grid; gap:16px;}
+.grid-metrics{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));}
+.metric .label{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink-dim); text-transform:none; margin-bottom:10px;}
+.metric .value{font-size:26px; font-weight:600; font-variant-numeric:tabular-nums;}
+.metric .value .unit{font-size:13px; color:var(--ink-dim); font-family:'IBM Plex Mono',monospace; margin-left:3px;}
+.metric .sub{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--glow); margin-top:6px;}
+
+.source-line{
+  font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink-dim);
+  display:flex; gap:14px; flex-wrap:wrap; padding-top:14px; margin-top:18px; border-top:1px dashed var(--line);
+}
+.source-line b{color:var(--sand); font-weight:500;}
+
+/* ---------- region picker chips ---------- */
+.region-tabs{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:28px;}
+.region-tab{
+  font-family:'IBM Plex Mono',monospace; font-size:12.5px; padding:9px 16px; border-radius:9px;
+  border:1px solid var(--line); background:transparent; color:var(--ink-dim); cursor:pointer;
+  transition:all .18s;
+}
+.region-tab.active{background:rgba(51,230,196,0.12); border-color:var(--glow); color:var(--glow);}
+.region-tab:hover:not(.active){color:var(--ink); border-color:var(--sky);}
+
+/* ---------- digital twin ---------- */
+.twin-layout{display:grid; grid-template-columns:1.3fr 1fr; gap:20px;}
+@media (max-width:860px){ .twin-layout{grid-template-columns:1fr;} }
+.sample-picker{display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;}
+.sample-btn{
+  font-family:'IBM Plex Mono',monospace; font-size:11.5px; padding:7px 12px; border-radius:7px;
+  background:rgba(255,255,255,0.04); border:1px solid var(--line); color:var(--ink-dim); cursor:pointer;
+}
+.sample-btn.active{border-color:var(--sky); color:var(--sky); background:rgba(111,203,234,0.1);}
+.twin-readouts{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:16px;}
+.readout .k{font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--ink-dim);}
+.readout .v{font-size:18px; font-weight:600; margin-top:3px;}
+.confidence-chip{
+  display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:11px; padding:4px 10px;
+  border-radius:20px; margin-top:4px;
+}
+.chip-high{background:rgba(51,230,196,0.14); color:var(--glow);}
+.chip-medium{background:rgba(232,201,160,0.16); color:var(--sand);}
+.chip-low{background:rgba(255,122,100,0.16); color:var(--coral);}
+.legend-row{display:flex; gap:16px; flex-wrap:wrap; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink-dim); margin-top:10px;}
+.legend-row span{display:inline-flex; align-items:center; gap:6px;}
+.swatch{width:14px; height:3px; border-radius:2px; display:inline-block;}
+
+/* ---------- explainability ---------- */
+.explain-layout{display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:center;}
+@media (max-width:860px){ .explain-layout{grid-template-columns:1fr;} }
+.explain-sentence{font-size:16px; line-height:1.65; color:var(--ink);}
+.explain-sentence b{color:var(--glow); font-weight:600;}
+
+/* ---------- anomalies ---------- */
+.event-list{display:flex; flex-direction:column; gap:10px;}
+.event-row{
+  display:flex; align-items:flex-start; gap:14px; padding:14px 16px; border-radius:11px;
+  background:rgba(255,255,255,0.03); border:1px solid var(--line); cursor:pointer; transition:background .15s;
+}
+.event-row:hover{background:rgba(255,255,255,0.06);}
+.event-dot{width:9px; height:9px; border-radius:50%; margin-top:5px; flex:none;}
+.event-dot.heat{background:var(--coral); box-shadow:0 0 8px 2px rgba(255,122,100,0.55);}
+.event-dot.cold{background:var(--sky); box-shadow:0 0 8px 2px rgba(111,203,234,0.55);}
+.event-body{flex:1;}
+.event-top{display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;}
+.event-title{font-weight:600; font-size:14.5px;}
+.event-meta{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink-dim);}
+.event-reason{font-size:13px; color:var(--ink-dim); margin-top:6px; line-height:1.5;}
+.event-detail{display:none; margin-top:10px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink-dim); border-top:1px dashed var(--line); padding-top:10px;}
+.event-row.open .event-detail{display:block;}
+.sev-chip{font-family:'IBM Plex Mono',monospace; font-size:10px; padding:2px 9px; border-radius:20px; background:rgba(255,122,100,0.15); color:var(--coral); align-self:flex-start;}
+
+/* ---------- argo ---------- */
+.argo-layout{display:grid; grid-template-columns:1fr 1fr; gap:20px;}
+@media (max-width:860px){ .argo-layout{grid-template-columns:1fr;} }
+.argo-item{display:flex; justify-content:space-between; align-items:center; padding:11px 4px; border-bottom:1px solid var(--line); font-size:13px;}
+.argo-item:last-child{border-bottom:none;}
+.argo-coord{font-family:'IBM Plex Mono',monospace; color:var(--ink-dim); font-size:12px;}
+.priority-bar{height:5px; border-radius:3px; background:rgba(255,255,255,0.08); width:90px; overflow:hidden; margin-top:5px;}
+.priority-fill{height:100%; background:linear-gradient(90deg,var(--sky),var(--glow));}
+
+/* ---------- skill-by-depth ---------- */
+.depth-skill-wrap{position:relative; height:240px;}
+
+/* ---------- footer ---------- */
+footer{border-top:1px solid var(--line); padding:44px 0 60px;}
+footer .foot-grid{display:flex; justify-content:space-between; gap:30px; flex-wrap:wrap;}
+footer p{color:var(--ink-dim); font-size:13px; line-height:1.7; max-width:560px;}
+footer .foot-brand{font-weight:600; font-size:15px; margin-bottom:10px;}
+.small-caps{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink-dim); letter-spacing:0.02em;}
+
+h3.panel-title{font-size:19px; font-weight:600; margin:0 0 4px;}
+p.panel-sub{color:var(--ink-dim); font-size:13px; margin:0 0 18px;}
+canvas{max-width:100%;}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="brand"><span class="brand-dot"></span>OceanEmbed</div>
+  <div class="nav-links">
+    <a href="#overview">Overview</a>
+    <a href="#twin">Digital Twin</a>
+    <a href="#explain">Explainability</a>
+    <a href="#anomalies">Anomalies</a>
+    <a href="#argo">Argo Network</a>
+  </div>
+  <div class="dataset-badge mono" id="nav-badge">PROTOTYPE DATASET</div>
+</nav>
+
+<section class="hero">
+  <canvas id="globe-canvas"></canvas>
+  <div class="hero-inner wrap">
+    <div class="hero-grid">
+      <p class="kicker">SIH26066 · DISASTER MANAGEMENT · SUBSURFACE OCEAN INTELLIGENCE</p>
+      <h1>The ocean's hidden <span class="accent">3D structure</span>, reconstructed from what satellites can see on the surface.</h1>
+      <p class="lede">A physics-informed model turns surface SST, salinity, sea-surface height, winds and currents into a full 0–1000&nbsp;m temperature profile — with uncertainty, explainability, and anomaly detection built in. Click an active basin to open its digital twin.</p>
+      <div class="hero-cta">
+        <button class="btn btn-primary" onclick="selectRegion('bay_of_bengal'); scrollToId('overview');">Open Bay of Bengal ↦</button>
+        <button class="btn btn-ghost" onclick="selectRegion('arabian_sea'); scrollToId('overview');">Open Arabian Sea ↦</button>
+      </div>
+      <div class="hero-hint"><span class="pulse-dot"></span> Two active basins connected to real model output. Other markers on the globe are not yet trained — click one to see why.</div>
+    </div>
+  </div>
+</section>
+
+<main class="wrap">
+
+  <section class="section" id="overview">
+    <div class="section-head">
+      <p class="eyebrow">01 — LIVE MODEL OUTPUT</p>
+      <h2 id="overview-title">Bay of Bengal — reconstruction summary</h2>
+      <p>Skill of the physics-informed model against a climatology baseline and against held-out Argo float profiles, for the current data window.</p>
+    </div>
+    <div class="region-tabs" id="region-tabs"></div>
+    <div class="card grid grid-metrics" id="metric-cards"></div>
+    <div id="live-strip" class="source-line mono" style="margin-top:8px;"></div>
+    <div class="source-line" id="overview-source"></div>
+    <button class="cta" id="reportBtn" style="margin-top:14px;padding:10px 18px;font-size:13px;">⬇ Generate Technical Report (PDF)</button>
+  </section>
+
+  <section class="section" id="twin">
+    <div class="section-head">
+      <p class="eyebrow">02 — DIGITAL TWIN</p>
+      <h2>Vertical profile at a point</h2>
+      <p>Predicted temperature by depth, with the model's own uncertainty band, next to a GLORYS-style reanalysis reference and (where available) the nearest Argo float observation.</p>
+    </div>
+    <div class="card">
+      <div class="sample-picker" id="sample-picker"></div>
+      <div class="twin-layout">
+        <div>
+          <div class="depth-skill-wrap" style="height:340px;">
+            <canvas id="twin-chart"></canvas>
+          </div>
+          <div class="legend-row">
+            <span><span class="swatch" style="background:var(--glow);"></span>Predicted (± uncertainty)</span>
+            <span><span class="swatch" style="background:var(--sand);"></span>GLORYS-style reference</span>
+            <span><span class="swatch" style="background:var(--sky);"></span>Argo observed</span>
+          </div>
+        </div>
+        <div>
+          <div class="twin-readouts" id="twin-readouts"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="explain">
+    <div class="section-head">
+      <p class="eyebrow">03 — EXPLAINABILITY</p>
+      <h2>Why the model predicted this</h2>
+      <p>Feature contribution weights for the selected basin, read directly off the trained model — not a canned explanation.</p>
+    </div>
+    <div class="card explain-layout">
+      <div class="depth-skill-wrap" style="height:280px;">
+        <canvas id="explain-chart"></canvas>
+      </div>
+      <div>
+        <p class="explain-sentence" id="explain-sentence"></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="skill">
+    <div class="section-head">
+      <p class="eyebrow">04 — MODEL SKILL BY DEPTH</p>
+      <h2>Where the reconstruction is strongest</h2>
+      <p>Correlation with the reference reanalysis at each of the 16 standard depth levels.</p>
+    </div>
+    <div class="card">
+      <div class="depth-skill-wrap"><canvas id="depth-skill-chart"></canvas></div>
+    </div>
+  </section>
+
+  <section class="section" id="anomalies">
+    <div class="section-head">
+      <p class="eyebrow">05 — ANOMALY DETECTION</p>
+      <h2>Flagged events in this window</h2>
+      <p>Threshold-based detection on standard-deviation anomaly, absolute-degree floor, and mixed-layer-depth collapse ratio. Tap a row for detection detail.</p>
+    </div>
+    <div class="card">
+      <div class="event-list" id="event-list"></div>
+    </div>
+  </section>
+
+  <section class="section" id="argo">
+    <div class="section-head">
+      <p class="eyebrow">06 — SMART ARGO GUIDANCE</p>
+      <h2>Where to send the next float</h2>
+      <p>Sites ranked by a mix of model uncertainty, existing Argo sparsity, and local anomaly strength.</p>
+    </div>
+    <div class="card argo-layout">
+      <div>
+        <p class="panel-title" style="font-size:15px;">Priority deployment sites</p>
+        <div id="argo-list"></div>
+      </div>
+      <div>
+        <div class="grid grid-metrics">
+          <div class="metric"><div class="label">Argo profiles assimilated</div><div class="value" id="argo-total">—</div></div>
+          <div class="metric"><div class="label">Basin</div><div class="value" id="argo-basin" style="font-size:18px;">—</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap foot-grid">
+    <div>
+      <div class="foot-brand">OceanEmbed</div>
+      <p>Every number on this page — RMSE, correlation, explainability weights, thermocline depth, ocean heat content, detected anomalies, Argo priority scores — was actually computed by the project's physics-informed pipeline, on the dataset labeled <b class="mono" style="color:var(--sand);">DEMO / PROTOTYPE DATASET (synthetic, physically-styled)</b>. Nothing here is hand-typed. Live satellite integration (Copernicus Marine, NASA EarthData, NOAA CoastWatch, Argo GDAC) is written as backend client code and connects once run with network access and API credentials.</p>
+    </div>
+    <div class="small-caps">SIH26066 · TEAM BWU TECH TITANS · 2026</div>
+  </div>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ DATA (real pipeline output) ============ */
+const OCEAN_DATA = 
+{"dataset_label": "DEMO / PROTOTYPE DATASET (synthetic, physically-styled \u2014 not live satellite data)", "depths_m": [0.0, 25.0, 50.0, 75.0, 100.0, 150.0, 200.0, 250.0, 300.0, 400.0, 500.0, 600.0, 700.0, 800.0, 900.0, 1000.0], "regions": {"bay_of_bengal": {"region_name": "Bay of Bengal", "bbox": {"lat_min": 5.0, "lat_max": 22.0, "lon_min": 80.0, "lon_max": 100.0}, "date_range": ["2026-01-10", "2026-01-15"], "metrics": {"model": {"rmse": 0.2212215624587257, "bias": 0.04484263592418324, "correlation": 0.9995675015659023}, "baseline_climatology": {"rmse": 0.6629602997220865, "bias": 0.1512296376302717, "correlation": 0.9955248100703388}}, "depthwise_model": [{"depth_m": 0.0, "rmse": 0.708, "bias": 0.666, "correlation": 0.9641}, {"depth_m": 25.0, "rmse": 0.283, "bias": -0.033, "correlation": 0.9702}, {"depth_m": 50.0, "rmse": 0.246, "bias": -0.003, "correlation": 0.9832}, {"depth_m": 75.0, "rmse": 0.215, "bias": 0.112, "correlation": 0.9883}, {"depth_m": 100.0, "rmse": 0.154, "bias": -0.077, "correlation": 0.9907}, {"depth_m": 150.0, "rmse": 0.239, "bias": 0.232, "correlation": 0.9827}, {"depth_m": 200.0, "rmse": 0.052, "bias": -0.038, "correlation": 0.9688}, {"depth_m": 250.0, "rmse": 0.07, "bias": -0.061, "correlation": 0.9214}, {"depth_m": 300.0, "rmse": 0.028, "bias": -0.021, "correlation": 0.9689}, {"depth_m": 400.0, "rmse": 0.029, "bias": -0.011, "correlation": 0.9365}, {"depth_m": 500.0, "rmse": 0.03, "bias": -0.009, "correlation": 0.9241}, {"depth_m": 600.0, "rmse": 0.017, "bias": -0.011, "correlation": 0.9825}, {"depth_m": 700.0, "rmse": 0.032, "bias": -0.006, "correlation": 0.911}, {"depth_m": 800.0, "rmse": 0.038, "bias": -0.011, "correlation": 0.8844}, {"depth_m": 900.0, "rmse": 0.031, "bias": -0.001, "correlation": 0.9056}, {"depth_m": 1000.0, "rmse": 0.032, "bias": -0.009, "correlation": 0.905}], "argo_validation": {"n_argo_profiles": 222, "rmse": 0.3994, "bias": 0.043, "correlation": 0.9983}, "explainability": {"sst": 0.1868, "sss": 0.2106, "ssh": 0.0917, "u_current": 0.0013, "v_current": 0.0033, "u_wind": 0.0604, "v_wind": 0.3273, "lat": 0.1168, "lon": 0.0018}, "events": [{"type": "Subsurface Cold Anomaly", "severity": "High", "date": "2026-01-15", "lat": 9.0, "lon": 84.0, "depth_m": 150.0, "anomaly_std": -2.2358075857192485, "anomaly_c": -0.44299042224568996, "reason": "mixed-layer depth collapsed to 50% of climatology", "detection_method": "prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"}, {"type": "Subsurface Heat Anomaly", "severity": "High", "date": "2026-01-13", "lat": 5.0, "lon": 97.0, "depth_m": 500.0, "anomaly_std": 2.2354112509569934, "anomaly_c": 0.08336469651752232, "reason": "mixed-layer depth collapsed to 56% of climatology", "detection_method": "prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"}, {"type": "Subsurface Heat Anomaly", "severity": "High", "date": "2026-01-13", "lat": 6.0, "lon": 96.0, "depth_m": 400.0, "anomaly_std": 2.2342181796722183, "anomaly_c": 0.17085871363665772, "reason": "mixed-layer depth collapsed to 56% of climatology", "detection_method": "prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"}, {"type": "Subsurface Heat Anomaly", "severity": "High", "date": "2026-01-15", "lat": 10.0, "lon": 87.0, "depth_m": 700.0, "anomaly_std": 2.2333046954063898, "anomaly_c": 0.17577557835456536, "reason": "mixed-layer depth collapsed to 50% of climatology", "detection_method": "prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"}, {"type": "Subsurface Heat Anomaly", "severity": "High", "date": "2026-01-13", "lat": 8.0, "lon": 98.0, "depth_m": 600.0, "anomaly_std": 2.232976446007725, "anomaly_c": 0.09378877872312019, "reason": "mixed-layer depth collapsed to 56% of climatology", "detection_method": "prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"}, {"type": "Subsurface Cold Anomaly", "severity": "High", "date": "2026-01-15", "lat": 9.0, "lon": 88.0, "depth_m": 100.0, "anomaly_std": -2.2308502054340775, "anomaly_c": -1.6684641191078553, "reason": "temperature anomaly -1.67C (-2.2 sigma) at 100m; mixed-layer depth collapsed to 50% of climatology", "detection_method": "prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"}], "argo_guidance": [{"lat": 8.0, "lon": 85.0, "priority_score": 0.8369612914616327, "reason": "high model uncertainty; sparse existing Argo coverage"}, {"lat": 10.0, "lon": 86.0, "priority_score": 0.8292275713916222, "reason": "high model uncertainty; sparse existing Argo coverage"}, {"lat": 9.0, "lon": 84.0, "priority_score": 0.8150064744998059, "reason": "high model uncertainty; sparse existing Argo coverage"}, {"lat": 9.0, "lon": 86.0, "priority_score": 0.8141534365399692, "reason": "high model uncertainty; sparse existing Argo coverage"}, {"lat": 11.0, "lon": 86.0, "priority_score": 0.8008640687058093, "reason": "high model uncertainty; sparse existing Argo coverage"}, {"lat": 8.0, "lon": 86.0, "priority_score": 0.7836084099734748, "reason": "high model uncertainty; sparse existing Argo coverage"}], "n_argo_profiles_total": 222, "profile_samples": [{"lat": 16.0, "lon": 98.0, "date": "2026-01-15", "predicted_temperature_c": [23.9, 20.65, 16.78, 12.56, 8.73, 5.47, 4.24, 4.0, 4.0, 4.01, 4.0, 4.02, 4.03, 4.03, 4.06, 4.05], "uncertainty_c": [0.199, 0.261, 0.239, 0.176, 0.114, 0.124, 0.072, 0.091, 0.081, 0.063, 0.105, 0.061, 0.077, 0.077, 0.064, 0.079], "confidence": ["High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High"], "thermocline": {"thermocline_depth_m": 62.5, "thermocline_temperature_c": 14.669630597777784, "max_gradient_c_per_m": -0.16910989967616658}, "ocean_heat_content": {"heat_content_j_per_m2": 10911190321.109083, "depth_range_m": [0, 300]}, "glorys_reference_c": [23.35, 20.28, 16.63, 12.65, 8.77, 6.05, 4.48, 4.11, 4.03, 4.01, 4.01, 4.01, 4.01, 4.01, 4.01, 10.45], "argo_observed_c": [23.37, 21.31, 17.03, 12.61, 8.7, 4.68, 4.24, 3.78, 4.37, 4.02, 4.61, 4.29, 4.32, 4.11, 4.1, 4.26]}, {"lat": 22.0, "lon": 96.0, "date": "2026-01-15", "predicted_temperature_c": [22.85, 20.02, 16.75, 13.02, 9.27, 5.78, 4.42, 4.1, 4.09, 4.08, 4.07, 4.09, 4.09, 4.05, 4.06, 4.05], "uncertainty_c": [0.27, 0.213, 0.203, 0.182, 0.155, 0.109, 0.078, 0.079, 0.087, 0.088, 0.073, 0.082, 0.096, 0.072, 0.102, 0.065], "confidence": ["High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High"], "thermocline": {"thermocline_depth_m": 87.5, "thermocline_temperature_c": 11.144458183674988, "max_gradient_c_per_m": -0.14996164200613712}, "ocean_heat_content": {"heat_content_j_per_m2": 11049179360.233059, "depth_range_m": [0, 300]}, "glorys_reference_c": [22.27, 19.72, 16.61, 13.1, 9.39, 6.57, 4.81, 4.31, 4.19, 4.17, 4.16, 4.16, 4.16, 4.16, 4.16, 10.21], "argo_observed_c": [22.57, 19.77, 16.91, 13.83, 9.44, 5.52, 4.22, 3.68, 4.54, 4.13, 4.21, 4.75, 4.98, 3.79, 4.47, 4.32]}, {"lat": 9.0, "lon": 85.0, "date": "2026-01-15", "predicted_temperature_c": [22.76, 16.2, 11.15, 7.84, 5.87, 4.6, 4.28, 4.16, 4.17, 4.1, 4.15, 4.17, 4.22, 4.22, 4.14, 4.06], "uncertainty_c": [0.56, 0.789, 0.856, 0.662, 0.366, 0.211, 0.202, 0.207, 0.341, 0.27, 0.227, 0.243, 0.223, 0.284, 0.247, 0.288], "confidence": ["Medium", "Medium", "Low", "Medium", "Medium", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High"], "thermocline": {"thermocline_depth_m": 12.5, "thermocline_temperature_c": 19.483718862832745, "max_gradient_c_per_m": -0.26238343263588687}, "ocean_heat_content": {"heat_content_j_per_m2": 8777251469.253067, "depth_range_m": [0, 300]}, "glorys_reference_c": [21.84, 16.82, 12.28, 8.74, 6.31, 4.95, 4.28, 4.13, 4.1, 4.09, 4.09, 4.09, 4.09, 4.09, 4.09, 10.01], "argo_observed_c": [24.4, 20.86, 16.15, 11.76, 7.92, 5.38, 4.4, 4.14, 4.07, 4.22, 4.4, 4.37, 4.17, 4.35, 4.08, 4.48]}]}, "arabian_sea": {"region_name": "Arabian Sea", "bbox": {"lat_min": 5.0, "lat_max": 25.0, "lon_min": 50.0, "lon_max": 78.0}, "date_range": ["2026-01-10", "2026-01-15"], "metrics": {"model": {"rmse": 0.2100331768932984, "bias": 0.011217607538743435, "correlation": 0.9994569949570027}, "baseline_climatology": {"rmse": 0.5944448833785044, "bias": 0.12450862415132992, "correlation": 0.9962478501077239}}, "depthwise_model": [{"depth_m": 0.0, "rmse": 0.49, "bias": 0.449, "correlation": 0.9875}, {"depth_m": 25.0, "rmse": 0.405, "bias": -0.245, "correlation": 0.9768}, {"depth_m": 50.0, "rmse": 0.382, "bias": -0.2, "correlation": 0.9838}, {"depth_m": 75.0, "rmse": 0.245, "bias": -0.009, "correlation": 0.9811}, {"depth_m": 100.0, "rmse": 0.176, "bias": -0.126, "correlation": 0.9843}, {"depth_m": 150.0, "rmse": 0.245, "bias": 0.237, "correlation": 0.9726}, {"depth_m": 200.0, "rmse": 0.033, "bias": -0.025, "correlation": 0.9881}, {"depth_m": 250.0, "rmse": 0.033, "bias": -0.03, "correlation": 0.9883}, {"depth_m": 300.0, "rmse": 0.01, "bias": 0.007, "correlation": 0.9965}, {"depth_m": 400.0, "rmse": 0.019, "bias": 0.018, "correlation": 0.9946}, {"depth_m": 500.0, "rmse": 0.018, "bias": 0.017, "correlation": 0.9955}, {"depth_m": 600.0, "rmse": 0.018, "bias": 0.017, "correlation": 0.9981}, {"depth_m": 700.0, "rmse": 0.017, "bias": 0.014, "correlation": 0.9935}, {"depth_m": 800.0, "rmse": 0.018, "bias": 0.016, "correlation": 0.9963}, {"depth_m": 900.0, "rmse": 0.023, "bias": 0.022, "correlation": 0.9993}, {"depth_m": 1000.0, "rmse": 0.021, "bias": 0.019, "correlation": 0.994}], "argo_validation": {"n_argo_profiles": 360, "rmse": 0.3997, "bias": 0.0198, "correlation": 0.9981}, "explainability": {"sst": 0.2122, "sss": 0.1945, "ssh": 0.0665, "u_current": 0.0007, "v_current": 0.001, "u_wind": 0.0762, "v_wind": 0.2944, "lat": 0.1537, "lon": 0.0008}, "events": [{"type": "Subsurface Cold Anomaly", "severity": "High", "date": "2026-01-15", "lat": 21.0, "lon": 72.0, "depth_m": 150.0, "anomaly_std": -2.2348856763322886, "anomaly_c": -0.7260724412230735, "reason": "mixed-layer depth collapsed to 50% of climatology", "detection_method": "prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"}, {"type": "Subsurface Cold Anomaly", "severity": "High", "date": "2026-01-15", "lat": 21.0, "lon": 70.0, "depth_m": 150.0, "anomaly_std": -2.234708305648456, "anomaly_c": -0.754312694707445, "reason": "mixed-layer depth collapsed to 50% of climatology", "detection_method": "prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"}, {"type": "Subsurface Cold Anomaly", "severity": "High", "date": "2026-01-15", "lat": 20.0, "lon": 73.0, "depth_m": 150.0, "anomaly_std": -2.2345011114415523, "anomaly_c": -0.7547480849827988, "reason": "mixed-layer depth collapsed to 50% of climatology", "detection_method": "prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"}, {"type": "Subsurface Cold Anomaly", "severity": "High", "date": "2026-01-15", "lat": 22.0, "lon": 71.0, "depth_m": 100.0, "anomaly_std": -2.2344017545189123, "anomaly_c": -2.4558641677095325, "reason": "temperature anomaly -2.46C (-2.2 sigma) at 100m; mixed-layer depth collapsed to 50% of climatology", "detection_method": "prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"}, {"type": "Subsurface Cold Anomaly", "severity": "High", "date": "2026-01-15", "lat": 19.0, "lon": 71.0, "depth_m": 150.0, "anomaly_std": -2.2339810815767613, "anomaly_c": -0.850886574563682, "reason": "temperature anomaly -0.85C (-2.2 sigma) at 150m; mixed-layer depth collapsed to 50% of climatology", "detection_method": "prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"}, {"type": "Subsurface Heat Anomaly", "severity": "High", "date": "2026-01-15", "lat": 18.0, "lon": 71.0, "depth_m": 400.0, "anomaly_std": 2.2336654208471614, "anomaly_c": 0.1672600974753644, "reason": "mixed-layer depth collapsed to 50% of climatology", "detection_method": "prototype threshold-based (std-dev anomaly + abs-degree floor + MLD collapse ratio)"}], "argo_guidance": [{"lat": 20.0, "lon": 69.0, "priority_score": 0.8719890691339998, "reason": "high model uncertainty; sparse existing Argo coverage; strong local anomaly"}, {"lat": 20.0, "lon": 72.0, "priority_score": 0.8406806462313814, "reason": "high model uncertainty; sparse existing Argo coverage"}, {"lat": 22.0, "lon": 71.0, "priority_score": 0.8335084650808858, "reason": "high model uncertainty; sparse existing Argo coverage"}, {"lat": 19.0, "lon": 69.0, "priority_score": 0.7973541476746183, "reason": "high model uncertainty; sparse existing Argo coverage"}, {"lat": 21.0, "lon": 73.0, "priority_score": 0.7971114894270349, "reason": "high model uncertainty; sparse existing Argo coverage"}, {"lat": 18.0, "lon": 71.0, "priority_score": 0.7961692361134914, "reason": "high model uncertainty; sparse existing Argo coverage"}], "n_argo_profiles_total": 360, "profile_samples": [{"lat": 11.0, "lon": 51.0, "date": "2026-01-15", "predicted_temperature_c": [24.62, 20.83, 16.37, 11.7, 7.84, 4.98, 4.06, 3.95, 3.97, 3.96, 3.96, 3.96, 3.97, 3.96, 3.96, 3.97], "uncertainty_c": [0.149, 0.099, 0.069, 0.068, 0.076, 0.046, 0.033, 0.04, 0.026, 0.031, 0.04, 0.022, 0.031, 0.036, 0.034, 0.025], "confidence": ["High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High"], "thermocline": {"thermocline_depth_m": 62.5, "thermocline_temperature_c": 14.03385892426306, "max_gradient_c_per_m": -0.18697318595800183}, "ocean_heat_content": {"heat_content_j_per_m2": 10548387714.155037, "depth_range_m": [0, 300]}, "glorys_reference_c": [24.25, 20.71, 16.5, 12.08, 8.15, 5.64, 4.34, 4.08, 4.03, 4.02, 4.02, 4.02, 4.02, 4.02, 4.02, 10.78], "argo_observed_c": [23.98, 21.44, 16.85, 11.85, 7.82, 5.44, 4.71, 3.84, 3.92, 4.37, 3.68, 4.1, 3.97, 3.71, 3.87, 3.41]}, {"lat": 12.0, "lon": 69.0, "date": "2026-01-15", "predicted_temperature_c": [23.98, 20.22, 15.95, 11.56, 7.91, 5.09, 4.15, 4.01, 4.01, 4.01, 4.02, 4.02, 4.02, 4.01, 4.01, 4.02], "uncertainty_c": [0.141, 0.121, 0.121, 0.102, 0.077, 0.061, 0.054, 0.042, 0.042, 0.02, 0.035, 0.036, 0.034, 0.061, 0.062, 0.045], "confidence": ["High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High"], "thermocline": {"thermocline_depth_m": 62.5, "thermocline_temperature_c": 13.756968734407728, "max_gradient_c_per_m": -0.17571247152486932}, "ocean_heat_content": {"heat_content_j_per_m2": 10464401056.54534, "depth_range_m": [0, 300]}, "glorys_reference_c": [23.59, 20.11, 16.09, 11.92, 8.15, 5.69, 4.37, 4.08, 4.02, 4.01, 4.01, 4.01, 4.01, 4.01, 4.01, 10.54], "argo_observed_c": [23.4, 19.84, 16.96, 12.07, 8.44, 4.98, 4.52, 4.47, 4.36, 4.32, 3.68, 4.15, 3.81, 3.58, 3.6, 4.15]}, {"lat": 10.0, "lon": 57.0, "date": "2026-01-15", "predicted_temperature_c": [24.66, 20.71, 16.18, 11.53, 7.76, 4.96, 4.07, 3.96, 3.98, 3.98, 3.98, 3.98, 3.98, 3.98, 3.99, 3.98], "uncertainty_c": [0.098, 0.069, 0.079, 0.079, 0.063, 0.047, 0.032, 0.037, 0.032, 0.033, 0.044, 0.03, 0.038, 0.042, 0.054, 0.04], "confidence": ["High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High", "High"], "thermocline": {"thermocline_depth_m": 62.5, "thermocline_temperature_c": 13.85704331994844, "max_gradient_c_per_m": -0.18584142077276553}, "ocean_heat_content": {"heat_content_j_per_m2": 10493322297.231928, "depth_range_m": [0, 300]}, "glorys_reference_c": [24.22, 20.52, 16.27, 11.88, 8.03, 5.59, 4.32, 4.06, 4.01, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 10.75], "argo_observed_c": null}]}}}
+;
+
+const REGION_KEYS = Object.keys(OCEAN_DATA.regions);
+let currentRegion = REGION_KEYS[0];
+let currentSampleIdx = 0;
+
+const FEATURE_LABELS = {
+  sst:'sea surface temperature', sss:'sea surface salinity', ssh:'sea surface height',
+  u_current:'zonal currents', v_current:'meridional currents',
+  u_wind:'zonal wind', v_wind:'meridional wind', lat:'latitude', lon:'longitude'
+};
+
+function fmt(n, d=2){ return Number(n).toFixed(d); }
+function pct(n){ return (n*100).toFixed(1) + '%'; }
+
+function showToast(msg, ms=3200){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=>t.classList.remove('show'), ms);
+}
+function scrollToId(id){ document.getElementById(id).scrollIntoView({behavior:'smooth'}); }
+
+/* ============ region tabs ============ */
+function buildTabs(){
+  const el = document.getElementById('region-tabs');
+  el.innerHTML = '';
+  REGION_KEYS.forEach(key=>{
+    const r = OCEAN_DATA.regions[key];
+    const b = document.createElement('button');
+    b.className = 'region-tab' + (key===currentRegion?' active':'');
+    b.textContent = r.region_name;
+    b.onclick = ()=>selectRegion(key);
+    el.appendChild(b);
+  });
+}
+
+/* ============ overview metrics ============ */
+function renderOverview(){
+  const r = OCEAN_DATA.regions[currentRegion];
+  document.getElementById('overview-title').textContent = r.region_name + ' — reconstruction summary';
+  const el = document.getElementById('metric-cards');
+  const improve = (1 - r.metrics.model.rmse / r.metrics.baseline_climatology.rmse) * 100;
+  el.innerHTML = `
+    <div class="metric"><div class="label">Model RMSE</div><div class="value">${fmt(r.metrics.model.rmse)}<span class="unit">°C</span></div><div class="sub">vs ${fmt(r.metrics.baseline_climatology.rmse)}°C baseline</div></div>
+    <div class="metric"><div class="label">Correlation</div><div class="value">${fmt(r.metrics.model.correlation,4)}</div><div class="sub">reference reanalysis</div></div>
+    <div class="metric"><div class="label">Skill gain over baseline</div><div class="value">${fmt(improve,0)}<span class="unit">%</span></div><div class="sub">RMSE reduction</div></div>
+    <div class="metric"><div class="label">Argo validation RMSE</div><div class="value">${fmt(r.argo_validation.rmse)}<span class="unit">°C</span></div><div class="sub">${r.argo_validation.n_argo_profiles} held-out profiles</div></div>
+  `;
+  document.getElementById('overview-source').innerHTML = `
+    <span><b>Dataset</b> ${OCEAN_DATA.dataset_label}</span>
+    <span><b>Window</b> ${r.date_range[0]} → ${r.date_range[1]}</span>
+    <span><b>Depth levels</b> ${OCEAN_DATA.depths_m.length} (0–1000 m)</span>
+    <span><b>Bbox</b> ${r.bbox.lat_min}–${r.bbox.lat_max}°N, ${r.bbox.lon_min}–${r.bbox.lon_max}°E</span>
+  `;
+}
+
+/* ============ digital twin ============ */
+let twinChart = null;
+function buildSamplePicker(){
+  const r = OCEAN_DATA.regions[currentRegion];
+  const el = document.getElementById('sample-picker');
+  el.innerHTML = '';
+  r.profile_samples.forEach((s,i)=>{
+    const b = document.createElement('button');
+    b.className = 'sample-btn' + (i===currentSampleIdx?' active':'');
+    b.textContent = `${s.lat}°N, ${s.lon}°E · ${s.date}`;
+    b.onclick = ()=>{ currentSampleIdx = i; renderTwin(); buildSamplePicker(); };
+    el.appendChild(b);
+  });
+}
+function renderTwin(){
+  const r = OCEAN_DATA.regions[currentRegion];
+  const s = r.profile_samples[currentSampleIdx];
+  const depths = OCEAN_DATA.depths_m;
+  const upper = s.predicted_temperature_c.map((v,i)=>v + s.uncertainty_c[i]);
+  const lower = s.predicted_temperature_c.map((v,i)=>v - s.uncertainty_c[i]);
+
+  const ctx = document.getElementById('twin-chart');
+  if(twinChart) twinChart.destroy();
+  const datasets = [
+    { label:'Uncertainty upper', data: upper, borderWidth:0, pointRadius:0, fill:'+1',
+      backgroundColor:'rgba(51,230,196,0.14)', tension:0.35 },
+    { label:'Uncertainty lower', data: lower, borderWidth:0, pointRadius:0, fill:false,
+      backgroundColor:'rgba(51,230,196,0.14)', tension:0.35 },
+    { label:'Predicted', data: s.predicted_temperature_c, borderColor:'#33E6C4', backgroundColor:'#33E6C4',
+      borderWidth:2.5, pointRadius:2.5, tension:0.35, fill:false },
+    { label:'GLORYS-style reference', data: s.glorys_reference_c, borderColor:'#E8C9A0', borderWidth:1.6,
+      borderDash:[5,4], pointRadius:0, tension:0.35, fill:false },
+  ];
+  if(s.argo_observed_c){
+    datasets.push({ label:'Argo observed', data: s.argo_observed_c, borderColor:'#6FCBEA',
+      backgroundColor:'#6FCBEA', borderWidth:0, pointRadius:3.5, showLine:false });
+  }
+  twinChart = new Chart(ctx, {
+    type:'line',
+    data:{ labels: depths, datasets },
+    options:{
+      indexAxis:'y',
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{
+        callbacks:{ title:(items)=>`${items[0].label} m` }
+      }},
+      scales:{
+        y:{ reverse:true, title:{display:true, text:'Depth (m)', color:'#9FBAC7'},
+            ticks:{color:'#9FBAC7', font:{family:'IBM Plex Mono', size:10}}, grid:{color:'rgba(159,186,199,0.08)'} },
+        x:{ title:{display:true, text:'Temperature (°C)', color:'#9FBAC7'},
+            ticks:{color:'#9FBAC7', font:{family:'IBM Plex Mono', size:10}}, grid:{color:'rgba(159,186,199,0.08)'} }
+      }
+    }
+  });
+
+  const allHigh = s.confidence.every(c=>c==='High');
+  const anyLow = s.confidence.some(c=>c==='Low');
+  const chipClass = anyLow ? 'chip-low' : (allHigh ? 'chip-high' : 'chip-medium');
+  const chipLabel = anyLow ? 'Mixed / Low confidence' : (allHigh ? 'High confidence' : 'Mixed confidence');
+  const ohcGJ = (s.ocean_heat_content.heat_content_j_per_m2/1e9).toFixed(2);
+
+  document.getElementById('twin-readouts').innerHTML = `
+    <div class="readout"><div class="k">THERMOCLINE DEPTH</div><div class="v">${fmt(s.thermocline.thermocline_depth_m,0)} m</div></div>
+    <div class="readout"><div class="k">THERMOCLINE TEMP</div><div class="v">${fmt(s.thermocline.thermocline_temperature_c,1)}°C</div></div>
+    <div class="readout"><div class="k">MAX GRADIENT</div><div class="v">${fmt(s.thermocline.max_gradient_c_per_m,2)} °C/m</div></div>
+    <div class="readout"><div class="k">OCEAN HEAT CONTENT (0–${s.ocean_heat_content.depth_range_m[1]}m)</div><div class="v">${ohcGJ} GJ/m²</div></div>
+    <div class="readout" style="grid-column:1 / -1;"><div class="k">MODEL CONFIDENCE</div><span class="confidence-chip ${chipClass}">${chipLabel}</span></div>
+  `;
+}
+
+/* ============ explainability ============ */
+let explainChart = null;
+function renderExplain(){
+  const r = OCEAN_DATA.regions[currentRegion];
+  const entries = Object.entries(r.explainability).sort((a,b)=>b[1]-a[1]);
+  const labels = entries.map(e=>FEATURE_LABELS[e[0]] || e[0]);
+  const values = entries.map(e=>e[1]*100);
+
+  const ctx = document.getElementById('explain-chart');
+  if(explainChart) explainChart.destroy();
+  explainChart = new Chart(ctx, {
+    type:'bar',
+    data:{ labels, datasets:[{ data:values, backgroundColor:'#33E6C4', borderRadius:5, barThickness:16 }] },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:(i)=>i.raw.toFixed(1)+'%'}} },
+      scales:{
+        x:{ ticks:{color:'#9FBAC7', font:{family:'IBM Plex Mono', size:10}}, grid:{color:'rgba(159,186,199,0.08)'} },
+        y:{ ticks:{color:'#EAF4F7', font:{family:'Space Grotesk', size:12}}, grid:{display:false} }
+      }
+    }
+  });
+
+  const top1 = entries[0], top2 = entries[1];
+  const combined = (top1[1]+top2[1])*100;
+  document.getElementById('explain-sentence').innerHTML =
+    `For <b>${r.region_name}</b> on this window, <b>${FEATURE_LABELS[top1[0]]}</b> (${pct(top1[1])}) and
+    <b>${FEATURE_LABELS[top2[0]]}</b> (${pct(top2[1])}) dominate the reconstruction, together accounting for
+    <b>${combined.toFixed(1)}%</b> of the model's decision — consistent with wind-driven mixing and salinity
+    stratification shaping the subsurface signal more than currents or position alone.`;
+}
+
+/* ============ depth skill chart ============ */
+let depthChart = null;
+function renderDepthSkill(){
+  const r = OCEAN_DATA.regions[currentRegion];
+  const labels = r.depthwise_model.map(d=>d.depth_m);
+  const corr = r.depthwise_model.map(d=>d.correlation);
+  const rmse = r.depthwise_model.map(d=>d.rmse);
+  const ctx = document.getElementById('depth-skill-chart');
+  if(depthChart) depthChart.destroy();
+  depthChart = new Chart(ctx, {
+    type:'line',
+    data:{ labels, datasets:[
+      { label:'Correlation', data:corr, borderColor:'#33E6C4', backgroundColor:'rgba(51,230,196,0.12)',
+        yAxisID:'y', borderWidth:2, pointRadius:2, fill:true, tension:0.3 },
+      { label:'RMSE (°C)', data:rmse, borderColor:'#FF7A64', yAxisID:'y1', borderWidth:2, pointRadius:2,
+        borderDash:[4,3], fill:false, tension:0.3 },
+    ]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{labels:{color:'#9FBAC7', font:{family:'IBM Plex Mono', size:11}}} },
+      scales:{
+        x:{ title:{display:true, text:'Depth (m)', color:'#9FBAC7'}, ticks:{color:'#9FBAC7', font:{size:10}}, grid:{color:'rgba(159,186,199,0.06)'} },
+        y:{ position:'left', title:{display:true, text:'Correlation', color:'#33E6C4'}, ticks:{color:'#9FBAC7', font:{size:10}}, grid:{color:'rgba(159,186,199,0.06)'}, min:0.8, max:1 },
+        y1:{ position:'right', title:{display:true, text:'RMSE (°C)', color:'#FF7A64'}, ticks:{color:'#9FBAC7', font:{size:10}}, grid:{display:false} }
+      }
+    }
+  });
+}
+
+/* ============ anomalies ============ */
+function renderEvents(){
+  const r = OCEAN_DATA.regions[currentRegion];
+  const el = document.getElementById('event-list');
+  el.innerHTML = '';
+  r.events.forEach(ev=>{
+    const row = document.createElement('div');
+    row.className = 'event-row';
+    const isHeat = ev.type.toLowerCase().includes('heat');
+    row.innerHTML = `
+      <div class="event-dot ${isHeat?'heat':'cold'}"></div>
+      <div class="event-body">
+        <div class="event-top">
+          <div>
+            <div class="event-title">${ev.type}</div>
+            <div class="event-meta">${ev.date} · ${ev.lat}°N, ${ev.lon}°E · ${ev.depth_m} m</div>
+          </div>
+          <div class="sev-chip">${ev.severity}</div>
+        </div>
+        <div class="event-reason">${ev.reason}</div>
+        <div class="event-detail mono">anomaly: ${fmt(ev.anomaly_c,2)}°C (${fmt(ev.anomaly_std,2)}σ) · detection: ${ev.detection_method}</div>
+      </div>
+    `;
+    row.onclick = ()=>row.classList.toggle('open');
+    el.appendChild(row);
+  });
+}
+
+/* ============ argo guidance ============ */
+function renderArgo(){
+  const r = OCEAN_DATA.regions[currentRegion];
+  document.getElementById('argo-total').textContent = r.n_argo_profiles_total;
+  document.getElementById('argo-basin').textContent = r.region_name;
+  const el = document.getElementById('argo-list');
+  el.innerHTML = '';
+  r.argo_guidance.forEach(g=>{
+    const row = document.createElement('div');
+    row.className = 'argo-item';
+    row.innerHTML = `
+      <div>
+        <div class="argo-coord">${g.lat}°N, ${g.lon}°E</div>
+        <div class="priority-bar"><div class="priority-fill" style="width:${(g.priority_score*100).toFixed(0)}%"></div></div>
+      </div>
+      <div style="text-align:right; max-width:180px;">
+        <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--glow);">${(g.priority_score*100).toFixed(0)}%</div>
+      </div>
+    `;
+    row.title = g.reason;
+    el.appendChild(row);
+  });
+}
+
+/* ============ orchestration ============ */
+function selectRegion(key){
+  currentRegion = key;
+  currentSampleIdx = 0;
+  buildTabs();
+  renderOverview();
+  buildSamplePicker();
+  renderTwin();
+  renderExplain();
+  renderDepthSkill();
+  renderEvents();
+  renderArgo();
+  moveGlobeMarkerHighlight(key);
+  if(typeof refreshLiveStrip === 'function') refreshLiveStrip();
+}
+
+/* =========================================================
+   THREE.JS ROTATING GLOBE
+   ========================================================= */
+const canvas = document.getElementById('globe-canvas');
+const heroEl = document.querySelector('.hero');
+let renderer, scene, camera, globeGroup, raycaster, mouse;
+let markerMeshes = [];
+
+const OCEAN_MARKERS = [
+  { key:'bay_of_bengal', label:'Bay of Bengal', lat:13, lon:90, active:true },
+  { key:'arabian_sea', label:'Arabian Sea', lat:15, lon:65, active:true },
+  { key:null, label:'Indian Ocean (broad)', lat:-25, lon:80, active:false },
+  { key:null, label:'Pacific Ocean', lat:0, lon:-160, active:false },
+  { key:null, label:'Atlantic Ocean', lat:10, lon:-40, active:false },
+  { key:null, label:'Southern Ocean', lat:-65, lon:20, active:false },
+  { key:null, label:'Mediterranean Sea', lat:35, lon:18, active:false },
+  { key:null, label:'South China Sea', lat:12, lon:115, active:false },
+  { key:null, label:'Gulf of Mexico', lat:25, lon:-90, active:false },
+  { key:null, label:'North Sea', lat:56, lon:3, active:false },
+];
+
+function latLonToVec3(lat, lon, radius){
+  const phi = (90-lat) * Math.PI/180;
+  const theta = (lon+180) * Math.PI/180;
+  return new THREE.Vector3(
+    -radius * Math.sin(phi) * Math.cos(theta),
+    radius * Math.cos(phi),
+    radius * Math.sin(phi) * Math.sin(theta)
+  );
+}
+
+function initGlobe(){
+  const w = heroEl.clientWidth, h = heroEl.clientHeight;
+  renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.setSize(w,h);
+
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(42, w/h, 0.1, 100);
+  camera.position.set(0,0.2,3.2);
+
+  globeGroup = new THREE.Group();
+  scene.add(globeGroup);
+
+  // core sphere
+  const core = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 48, 48),
+    new THREE.MeshPhongMaterial({ color:0x062338, shininess:12, specular:0x1a5a78 })
+  );
+  globeGroup.add(core);
+
+  // wireframe graticule
+  const wire = new THREE.Mesh(
+    new THREE.SphereGeometry(1.001, 24, 16),
+    new THREE.MeshBasicMaterial({ color:0x2f6f8f, wireframe:true, transparent:true, opacity:0.28 })
+  );
+  globeGroup.add(wire);
+
+  // atmosphere glow (backside)
+  const atmo = new THREE.Mesh(
+    new THREE.SphereGeometry(1.12, 48, 48),
+    new THREE.ShaderMaterial({
+      uniforms:{},
+      vertexShader:`varying vec3 vNormal; void main(){ vNormal = normalize(normalMatrix*normal); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+      fragmentShader:`varying vec3 vNormal; void main(){ float i = pow(0.62 - dot(vNormal, vec3(0,0,1.0)), 2.5); gl_FragColor = vec4(0.2,0.85,0.75,1.0) * i; }`,
+      blending: THREE.AdditiveBlending, side: THREE.BackSide, transparent:true
+    })
+  );
+  globeGroup.add(atmo);
+
+  // lights
+  scene.add(new THREE.AmbientLight(0x224455, 1.1));
+  const dl = new THREE.DirectionalLight(0x9fd8ee, 1.1);
+  dl.position.set(3,2,4);
+  scene.add(dl);
+
+  // markers
+  markerMeshes = [];
+  OCEAN_MARKERS.forEach(m=>{
+    const pos = latLonToVec3(m.lat, m.lon, 1.015);
+    const geo = new THREE.SphereGeometry(m.active?0.022:0.014, 12, 12);
+    const mat = new THREE.MeshBasicMaterial({ color: m.active ? 0x33e6c4 : 0x5a7280, transparent:true, opacity:m.active?1:0.55 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.copy(pos);
+    mesh.userData = m;
+    globeGroup.add(mesh);
+    markerMeshes.push(mesh);
+
+    if(m.active){
+      const ringGeo = new THREE.RingGeometry(0.03, 0.038, 24);
+      const ringMat = new THREE.MeshBasicMaterial({ color:0x33e6c4, side:THREE.DoubleSide, transparent:true, opacity:0.7 });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.position.copy(pos);
+      ring.lookAt(pos.clone().multiplyScalar(2));
+      globeGroup.add(ring);
+    }
+  });
+
+  // slight tilt like Earth's axis
+  globeGroup.rotation.z = 0.41;
+  globeGroup.rotation.y = -1.1;
+
+  raycaster = new THREE.Raycaster();
+  mouse = new THREE.Vector2();
+
+  canvas.addEventListener('pointermove', onPointerMove);
+  canvas.addEventListener('click', onGlobeClick);
+  window.addEventListener('resize', onResize);
+}
+
+let targetRotY = 0, mouseX = 0, mouseY = 0;
+function onPointerMove(e){
+  const r = canvas.getBoundingClientRect();
+  mouse.x = ((e.clientX - r.left)/r.width)*2 - 1;
+  mouse.y = -((e.clientY - r.top)/r.height)*2 + 1;
+  mouseX = mouse.x; mouseY = mouse.y;
+}
+function onGlobeClick(){
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(markerMeshes);
+  if(hits.length){
+    const m = hits[0].object.userData;
+    if(m.active){
+      selectRegion(m.key);
+      scrollToId('overview');
+      showToast(`${m.label} connected — showing live model output below.`);
+    } else {
+      showToast(`${m.label}: no trained model output yet. This build only covers Bay of Bengal & Arabian Sea — the ml/ pipeline can be retrained on a new basin once GLORYS + Argo data for it is available.`, 4200);
+    }
+  }
+}
+function moveGlobeMarkerHighlight(key){
+  markerMeshes.forEach(m=>{
+    if(m.userData.active){
+      m.material.opacity = (m.userData.key===key) ? 1 : 0.75;
+      m.scale.setScalar(m.userData.key===key ? 1.6 : 1);
+    }
+  });
+}
+function onResize(){
+  const w = heroEl.clientWidth, h = heroEl.clientHeight;
+  camera.aspect = w/h; camera.updateProjectionMatrix();
+  renderer.setSize(w,h);
+}
+function animateGlobe(){
+  requestAnimationFrame(animateGlobe);
+  globeGroup.rotation.y += 0.0016;
+  camera.position.x += (mouseX*0.35 - camera.position.x)*0.02;
+  camera.position.y += (0.2 + mouseY*0.2 - camera.position.y)*0.02;
+  camera.lookAt(0,0,0);
+  renderer.render(scene, camera);
+}
+
+/* ============ live gateway wiring ============ */
+async function refreshLiveStrip(){
+  const el = document.getElementById('live-strip');
+  if(!el) return;
+  el.innerHTML = 'checking OceanEmbed backend…';
+  const res = await OceanEmbedAPI.overview(currentRegion);
+  if(!res.ok){
+    el.innerHTML = `${OceanEmbedAPI.statusBadgeHTML('error')} backend unreachable (${res.error}) — figures above are the embedded prototype dataset.`;
+    return;
+  }
+  const cards = res.data.cards || {};
+  const sst = cards.average_surface_temperature_c;
+  const argo = cards.active_argo_floats;
+  el.innerHTML = [
+    sst ? `${OceanEmbedAPI.statusBadgeHTML(sst.status)} Live SST ${sst.value!=null?fmt(sst.value,1)+'°C':'n/a'} (${sst.source})` : '',
+    argo ? `${OceanEmbedAPI.statusBadgeHTML(argo.status)} Argo floats nearby: ${argo.value!=null?argo.value:'n/a'} (${argo.source})` : '',
+  ].filter(Boolean).join(' &nbsp;·&nbsp; ');
+}
+
+async function onGenerateReportFinal(){
+  const btn = document.getElementById('reportBtn');
+  const prev = btn.textContent;
+  btn.textContent = 'Generating…'; btn.disabled = true;
+  const res = await OceanEmbedAPI.generateReport(currentRegion);
+  btn.textContent = prev; btn.disabled = false;
+  if(!res.ok){
+    showToast(`Report needs the OceanEmbed backend running (${res.error})`);
+    return;
+  }
+  window.open(`${(window.OCEANEMBED_API_BASE||'http://localhost:8000/api')}/report/download?path=${encodeURIComponent(res.data.file_path)}`, '_blank');
+}
+document.getElementById('reportBtn').onclick = onGenerateReportFinal;
+
+/* ============ init ============ */
+document.getElementById('nav-badge').textContent = 'PROTOTYPE DATASET · NOT LIVE SATELLITE DATA';
+initGlobe();
+animateGlobe();
+selectRegion(currentRegion);
+refreshLiveStrip();
+</script>
+</body>
+</html>
